@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
-import { User as UserIcon, LogOut, ChevronDown } from 'lucide-react';
+import { User as UserIcon, LogOut, ChevronDown, CalendarDays } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import useAppDispatch from '@/hooks/useAppDispatch';
 import { logout } from '@/store/slices/authSlice';
@@ -17,6 +17,8 @@ import RoomEditorPage from '@/pages/RoomEditorPage';
 import ServicesPage from '@/pages/ServicesPage';
 import HotelsPage from '@/pages/HotelsPage';
 import CheckoutPage from '@/pages/CheckoutPage';
+import BookingsPage from '@/pages/BookingsPage';
+import BookingDetailPage from '@/pages/BookingDetailPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
 
@@ -127,6 +129,16 @@ const UserMenu = memo(function UserMenu() {
               Профиль
             </button>
             <button
+              onClick={() => {
+                setOpen(false);
+                navigate('/bookings');
+              }}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-text/70 hover:bg-ui transition-colors sm:hidden"
+            >
+              <CalendarDays size={16} />
+              Мои бронирования
+            </button>
+            <button
               onClick={handleLogout}
               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
             >
@@ -157,8 +169,16 @@ function AppContent() {
             <Link to="/rooms" className="text-sm text-text/60 hover:text-text transition-colors">
               Номера
             </Link>
+            {user && !isAdmin && (
+              <Link to="/bookings" className="text-sm text-text/60 hover:text-text transition-colors">
+                Мои бронирования
+              </Link>
+            )}
             {isAdmin && (
               <>
+                <Link to="/bookings" className="text-sm text-text/60 hover:text-text transition-colors">
+                  Бронирования
+                </Link>
                 <Link to="/admin/hotels" className="text-sm text-text/60 hover:text-text transition-colors">
                   Отели
                 </Link>
@@ -188,6 +208,8 @@ function AppContent() {
           {/* Protected */}
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+          <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
+          <Route path="/bookings/:bookingId" element={<ProtectedRoute><BookingDetailPage /></ProtectedRoute>} />
 
           {/* Admin */}
           <Route path="/admin/rooms/new" element={<AdminRoute><RoomEditorPage /></AdminRoute>} />

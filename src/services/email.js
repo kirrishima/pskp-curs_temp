@@ -408,4 +408,202 @@ async function sendBookingConfirmation(booking) {
   }
 }
 
-module.exports = { sendVerificationCode, sendBookingConfirmation };
+// ── Cancellation email ───────────────────────────────────────────────────────
+
+/**
+ * Sends a cancellation notification to the guest.
+ *
+ * @param {object} booking   Prisma Booking with user, room (with hotel), bookingServices
+ * @param {object} opts
+ *   opts.source        – 'GUEST' | 'ADMIN' | 'HOTEL' | 'SYSTEM'
+ *   opts.reason        – free-text reason (admin cancellations)
+ *   opts.penaltyAmount – number, amount withheld
+ *   opts.refundAmount  – number, amount actually refunded
+ *   opts.refundStatus  – 'FULL' | 'PARTIAL' | 'NONE' | 'PENDING' | 'FAILED' | 'ACTION_REQUIRED'
+ */
+async function sendCancellationEmail(booking, opts = {}) {
+  const config = getConfig();
+  const transporter = getTransporter();
+
+  const { user, room } = booking;
+  const hotel = room?.hotel || {};
+  const { source = 'GUEST', reason, penaltyAmount = 0, refundAmount = 0, refundStatus = 'NONE' } = opts;
+
+  const startDate = new Date(booking.startDate);
+  const endDate = new Date(booking.endDate);
+  const nights = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+  const totalPaid = Number(booking.payment?.amount ?? booking.totalAmount ?? 0);
+
+  const isHotelInitiated = source === 'HOTEL';
+  const isNoShow = source === 'SYSTEM';
+
+  const subjectPrefix = isHotelInitiated
+    ? '⚠️ Бронирование отменено отелем'
+    : isNoShow
+    ? '⚠️ Бронирование отменено (незаезд)'
+    : '❌ Бронирование отменено';
+
+  const headerColor = isHotelInitiated ? '#DC2626' : '#6B7280';
+
+  // ── Refund message block ────────────────────────────────────────────────────
+  let refundHtml = '';
+  if (refundStatus === 'NONE' || refundAmount === 0) {
+    if (penaltyAmount >= totalPaid && totalPaid > 0) {
+      refundHtml = `
+        <tr>
+          <td style="padding:12px 20px;background:#FEF2F2;border-radius:8px;font-size:14px;color:#991B1B;text-align:center;">
+            Возврат не предусмотрен. Удержан штраф в размере <strong>${_fmtPrice(penaltyAmount)}</strong>.
+          </td>
+        </tr>`;
+    }
+  } else {
+    const refundBlock = refundStatus === 'FULL'
+      ? `Возврат средств: <strong style="color:#16A34A;">${_fmtPrice(refundAmount)}</strong> (полный)`
+      : refundStatus === 'PARTIAL'
+      ? `Возврат средств: <strong style="color:#D97706;">${_fmtPrice(refundAmount)}</strong> (за вычетом штрафа ${_fmtPrice(penaltyAmount)})`
+      : refundStatus === 'PENDING'
+      ? `Возврат в обработке: <strong>${_fmtPrice(refundAmount)}</strong>`
+      : `Возврат: <strong style="color:#DC2626;">ожидает ручной обработки</strong>`;
+
+    const disclaimer = refundAmount > 0
+      ? `<p style="margin:8px 0 0;font-size:12px;color:#6B7280;">
+           Средства поступят на вашу карту в течение 5–10 рабочих дней, в зависимости от вашего банка.
+         </p>`
+      : '';
+
+    refundHtml = `
+      <tr>
+        <td style="padding:16px 20px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:14px;color:#166534;">
+          ${refundBlock}
+          ${disclaimer}
+        </td>
+      </tr>`;
+  }
+
+  // ── Hotel-initiated apology block ───────────────────────────────────────────
+  const apologyHtml = isHotelInitiated
+    ? `<tr>
+         <td style="padding:16px 24px;background:#FEF2F2;border-left:4px solid #DC2626;margin-bottom:16px;font-size:14px;color:#991B1B;line-height:1.6;">
+           <strong>Сожалеем об этой ситуации.</strong> Ваше бронирование было отменено по инициативе отеля.
+           Полная стоимость будет возвращена на вашу карту в течение 5–10 рабочих дней.
+         </td>
+       </tr>
+       <tr><td style="height:16px;"></td></tr>`
+    : '';
+
+  // ── Reason block ────────────────────────────────────────────────────────────
+  const reasonHtml = reason
+    ? `<p style="font-size:13px;color:#555;margin:4px 0 0;">
+         Причина: <em>${reason}</em>
+       </p>`
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8" /><title>Отмена бронирования</title></head>
+<body style="margin:0;padding:0;background:#F3F4F6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:${headerColor};padding:28px 32px;text-align:center;">
+            <h1 style="margin:0;font-size:24px;font-weight:700;color:#fff;">
+              ${isHotelInitiated ? 'Отмена бронирования отелем' : isNoShow ? 'Бронирование: незаезд' : 'Бронирование отменено'}
+            </h1>
+          </td>
+        </tr>
+
+        <!-- Booking ID -->
+        <tr>
+          <td style="background:#F9FAFB;padding:12px 32px;text-align:center;border-bottom:1px solid #E5E7EB;">
+            <span style="font-size:12px;color:#6B7280;letter-spacing:1px;text-transform:uppercase;">Номер бронирования</span><br/>
+            <span style="font-size:14px;font-weight:700;color:#111827;font-family:monospace;">${booking.bookingId}</span>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:28px 32px;">
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+              Здравствуйте, <strong>${user.firstName} ${user.lastName}</strong>!
+            </p>
+
+            ${apologyHtml}
+
+            <!-- Details table -->
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;margin-bottom:20px;">
+              <tr>
+                <td style="padding:10px 16px;font-size:13px;color:#6B7280;width:45%;">Номер</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;font-weight:600;">${room.title}</td>
+              </tr>
+              <tr style="background:#fff;">
+                <td style="padding:10px 16px;font-size:13px;color:#6B7280;">Даты</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;">
+                  ${_fmtDate(startDate)} — ${_fmtDate(endDate)}
+                  <span style="color:#9CA3AF;font-size:12px;"> (${nights} ${nights === 1 ? 'ночь' : nights < 5 ? 'ночи' : 'ночей'})</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;font-size:13px;color:#6B7280;">Оплачено</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;font-weight:600;">${_fmtPrice(totalPaid)}</td>
+              </tr>
+              ${penaltyAmount > 0 ? `
+              <tr style="background:#FEF9C3;">
+                <td style="padding:10px 16px;font-size:13px;color:#92400E;">Штраф (1 ночь)</td>
+                <td style="padding:10px 16px;font-size:14px;color:#92400E;font-weight:600;">−${_fmtPrice(penaltyAmount)}</td>
+              </tr>` : ''}
+              ${reasonHtml ? `<tr><td colspan="2" style="padding:0 16px 12px;">${reasonHtml}</td></tr>` : ''}
+            </table>
+
+            <!-- Refund block -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+              ${refundHtml}
+            </table>
+
+            <p style="margin:16px 0 0;font-size:13px;color:#6B7280;text-align:center;">
+              Если у вас есть вопросы, обратитесь в ${hotel.name || 'наш отель'}.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#F9FAFB;padding:16px 32px;text-align:center;border-top:1px solid #E5E7EB;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">
+              © ${new Date().getFullYear()} ${hotel.name || 'Hotel App'}. Все права защищены.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const mailOptions = {
+    from: `"${hotel.name || 'Hotel App'}" <${config.smtpUser}>`,
+    to: user.email,
+    subject: `${subjectPrefix} — ${room.title} · ${_fmtDate(startDate)}`,
+    html,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    logger.info('Cancellation email sent', { to: user.email, bookingId: booking.bookingId });
+  } catch (err) {
+    logger.error('Failed to send cancellation email', {
+      to: user.email,
+      bookingId: booking.bookingId,
+      error: err.message,
+    });
+    throw err; // Callers decide whether to swallow
+  }
+}
+
+module.exports = { sendVerificationCode, sendBookingConfirmation, sendCancellationEmail };

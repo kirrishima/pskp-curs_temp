@@ -104,19 +104,20 @@ function serializeBookingService(bs) {
 
 /**
  * Serializes a `Payment` record.
- * Decimal fields: amount
+ * Decimal fields: amount, refundAmount
  */
 function serializePayment(payment) {
   if (!payment) return payment;
   return {
     ...payment,
     amount: toNum(payment.amount),
+    refundAmount: toNum(payment.refundAmount),
   };
 }
 
 /**
  * Serializes a `Booking` record.
- * Decimal fields: totalAmount
+ * Decimal fields: totalAmount, penaltyAmount
  * Nested: payment, room (with hotel + roomServices), bookingServices
  */
 function serializeBooking(booking) {
@@ -124,6 +125,7 @@ function serializeBooking(booking) {
   return {
     ...booking,
     totalAmount: toNum(booking.totalAmount),
+    penaltyAmount: toNum(booking.penaltyAmount),
     payment: booking.payment ? serializePayment(booking.payment) : booking.payment,
     room: booking.room ? serializeRoom(booking.room) : booking.room,
     bookingServices: Array.isArray(booking.bookingServices)

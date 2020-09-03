@@ -310,3 +310,48 @@ export async function checkRoomAvailability(
   const result = await searchRooms({ checkIn, checkOut, hotelCode, roomNo, limit: 1 });
   return result.rooms.length > 0;
 }
+
+// ── Bookings ─────────────────────────────────────────────────────────────────
+
+export interface GetBookingsParams {
+  status?: string;
+  /** Admin/manager only: filter by a specific user's bookings. */
+  userId?: string;
+}
+
+export interface CancelBookingParams {
+  source: 'GUEST' | 'ADMIN' | 'HOTEL';
+  /** Admin only: whether to apply a 1-night penalty. */
+  applyPenalty?: boolean;
+  /** Required when source=ADMIN, optional otherwise. */
+  reason?: string;
+}
+
+export interface CancelBookingResult {
+  message: string;
+  refundAmount: number;
+  penaltyAmount: number;
+  refundStatus: string;
+}
+
+export async function getMyBookings(
+  params?: GetBookingsParams,
+): Promise<{ bookings: import('@/types').Booking[] }> {
+  const { data } = await api.get('/bookings', { params });
+  return data;
+}
+
+export async function getBookingById(
+  bookingId: string,
+): Promise<{ booking: import('@/types').Booking }> {
+  const { data } = await api.get(`/bookings/${bookingId}`);
+  return data;
+}
+
+export async function cancelBookingWithRefund(
+  bookingId: string,
+  params: CancelBookingParams,
+): Promise<CancelBookingResult> {
+  const { data } = await api.post(`/bookings/${bookingId}/cancel`, params);
+  return data;
+}

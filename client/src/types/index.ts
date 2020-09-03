@@ -119,7 +119,23 @@ export interface RoomServiceEntry {
 
 // ─── Booking ────────────────────────────────────────────────────────────────
 
-export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'CHECKED_IN' | 'CHECKED_OUT';
+export type BookingStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'CHECKED_IN'
+  | 'CHECKED_OUT'
+  | 'NO_SHOW';
+
+export type CancellationSource = 'GUEST' | 'ADMIN' | 'HOTEL' | 'SYSTEM';
+
+export type RefundStatus =
+  | 'NONE'
+  | 'FULL'
+  | 'PARTIAL'
+  | 'PENDING'
+  | 'FAILED'
+  | 'ACTION_REQUIRED';
 
 export interface Booking {
   bookingId: string;
@@ -133,6 +149,14 @@ export interface Booking {
   createdAt: string;
   notes?: string | null;
 
+  // Cancellation fields
+  cancelledAt?: string | null;
+  cancelledByUserId?: string | null;
+  cancellationSource?: CancellationSource | null;
+  cancellationReason?: string | null;
+  penaltyAmount?: number | null;
+  refundStatus: RefundStatus;
+
   room?: Room;
   hold?: { holdId: string; status: string; expiresAt: string };
   payment?: Payment;
@@ -144,7 +168,7 @@ export interface BookingServiceEntry {
   serviceCode: string;
   sourceState: RoomServiceState;
   priceSnapshot: number;
-  service?: { serviceCode: string; title: string; priceType: ServicePriceType };
+  service?: { serviceCode: string; title: string; priceType: ServicePriceType; icon?: string | null; iconUrl?: string | null };
 }
 
 // ─── Payment ────────────────────────────────────────────────────────────────
@@ -160,6 +184,12 @@ export interface Payment {
   bookingId: string;
   createdAt: string;
   updatedAt: string;
+
+  // Stripe audit trail (BR-S3)
+  stripeChargeId?: string | null;
+  stripeRefundId?: string | null;
+  stripeRefundStatus?: string | null;
+  refundAmount?: number | null;
 }
 
 // ─── Pagination ─────────────────────────────────────────────────────────────

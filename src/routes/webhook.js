@@ -123,11 +123,17 @@ async function _onPaymentSucceeded(paymentIntent) {
     return;
   }
 
+  // Capture the Stripe Charge ID now so refunds can be issued later (BR-S3)
+  const chargeId = paymentIntent.latest_charge || null;
+
   // Confirm booking + convert hold atomically
   const txOps = [
     prisma.payment.update({
       where: { id: payment.id },
-      data: { status: 'SUCCEEDED' },
+      data: {
+        status: 'SUCCEEDED',
+        ...(chargeId ? { stripeChargeId: chargeId } : {}),
+      },
     }),
     prisma.booking.update({
       where: { bookingId: payment.bookingId },

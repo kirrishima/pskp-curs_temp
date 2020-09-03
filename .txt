@@ -1,173 +1,35 @@
 cls & stripe listen --forward-to localhost:3001/api/webhooks/stripe
-увеличить размер обводки при фокусе поля для ввода, не отображать стандартную обводку (которая есть у поля до его выбора)
-
-при выходе назад и попытке отправить код повторно (проблема, что я описывал до этого), надо переходить к следующему этапу и корректно отображать оставшееся время до повторного отправления нового кода (просто не высылать сразу повторный код, только при нажатии на специальную кнопку для этого). 
-
-Гражданство должно позволять выбор "Не указано"
-
-У нас на сервере была конечная точка для входа по qr-code, надо добавить такой функционал на клиент - генерацию кода и сканирование для входа.
-
-@echo off
-
-start "" cmd /c "npm install"
-start "" cmd /c "cd client && npm install"
 
 
 
+(прошлый запрос оборвался из-за соединения, надо завершить начатое.)
+теперь добавим конечные точки и страницы на клиенте для просмотра бронирований. Пользователь, который видит свои бронирования, может посмотреть полностью подробные сведения о бронировании. Все, что указанно в нем + его id, дата создания, статус. 
 
-Поля ввода должны быть все равно с обводкой даже при отсутствии фокуса, просто при фокусе она должно пропадать и отображаться другая, для именно выделения поля при фокусе. 
-404. That’s an error.
-The requested URL /chart was not found on this server. That’s all we know. Изображение qr code не рендериться так как ты использовал некоерктную ссылку. можно использовать https://api.qrserver.com/v1/create-qr-code/
+1. Пользовательские требования (Со стороны Гостя / Front-end)
+
+BR-G1. Стандартная бесплатная отмена Система позволяет гостю отменить бронирование в 1 клик через личный кабинет или по защищенной ссылке не позднее, чем за 48 часов до расчетного времени заезда (например, 14:00). При этом система автоматически вызывает метод Stripe API (Refund) для 100% возврата средств на карту гостя.
+
+BR-G2. Поздняя отмена со штрафом При отмене менее чем за 48 часов система выводит предупреждение о штрафе (например, в размере стоимости первой ночи). После подтверждения отмены гостем, система инициирует через Stripe частичный возврат (Partial Refund): гостю возвращается полная сумма минус размер штрафа.
+
+BR-G3. Политика незаезда (No-show) Если гость не отменил бронь и не заселился до расчетного часа следующего дня, бронирование автоматически переходит в статус «Незаезд». Система проводит через Stripe частичный возврат (удерживая штраф за 1 ночь) и аннулирует бронь на оставшиеся дни.
+
+BR-G4. Финансовые уведомления После любой отмены система немедленно отправляет гостю email. Если был возврат, в письме обязательно указывается сумма возврата, сумма удержанного штрафа и стандартный дисклеймер Stripe: «Средства поступят на вашу карту в течение 5–10 рабочих дней, в зависимости от вашего банка».
+
+2. Внутренние требования (Со стороны сотрудников / Back-end)
+
+BR-S1. Ручная отмена администратором Сотрудник должен иметь возможность отменить бронь через панель управления (по звонку или письму гостя). Система должна спросить: «Удержать штраф?» (Да/Нет) и потребовать выбрать причину отмены из выпадающего списка. Выбор автоматически триггерит соответствующий API-запрос к Stripe (полный или частичный возврат).
+
+BR-S2. Отмена по инициативе отеля (Овербукинг / Форс-мажор) Если отель сам отменяет бронь, система блокирует возможность удержания штрафа. Через Stripe API принудительно проводится 100% возврат (Full Refund). Гостю автоматически уходит письмо с извинениями об отмене со стороны отеля.
+
+BR-S3. Финансовый аудит и логирование Stripe В карточке отмененного бронирования в панели администратора всегда должны отображаться данные от Stripe: PaymentIntent ID, Charge ID и Refund ID. Система должна вести неизменяемый лог: кто отменил (гость/система/ID сотрудника), время отмены, какая сумма была удержана, статус возврата в Stripe (succeeded/pending/failed).
+
+BR-S4. Мгновенный возврат инвентаря Независимо от того, кто и как отменил бронь (с возвратом или со штрафом), система должна мгновенно (в ту же секунду) освободить номер в базе данных, чтобы он стал доступен для нового бронирования на сайте.
+
+3. Специфические требования к интеграции со Stripe
+
+BR-P1. Обработка неудачных возвратов (Refund Failures) Если API Stripe возвращает ошибку при попытке сделать возврат (например, карта гостя заблокирована или закрыта), система должна оставить статус бронирования «Отменена», но пометить статус возврата как «Требует внимания» (Action Required) и отправить уведомление менеджеру для ручного разбирательства.
+
+BR-P2. Запрет на возврат больше суммы оплаты Система должна иметь валидацию на бэкенде, которая гарантирует, что сумма возврата (Refund) через Stripe никогда не превысит изначальную сумму списания (Charge), чтобы избежать финансовых потерь.
 
 
 
--- =========================
--- HOTELS
--- =========================
-CREATE TABLE hotels (
-  hotel_code TEXT PRIMARY KEY, -- Уникальный код отеля
-  name TEXT NOT NULL,
-  description TEXT,
-  city TEXT,
-  address TEXT,
-  phone TEXT,
-  email TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
--- =========================
--- ROOMS
--- =========================
-CREATE TABLE rooms (
-  room_no TEXT PRIMARY KEY, -- Номер комнаты
-  hotel_code TEXT NOT NULL REFERENCES hotels(hotel_code),
-
-  title TEXT NOT NULL,
-  description TEXT,
-
-  capacity INT NOT NULL, -- сколько человек
-  beds_count INT NOT NULL, -- количество кроватей
-  floor INT,
-
-  area NUMERIC, -- площадь (м²)
-
-  base_price NUMERIC NOT NULL,
-
-  status TEXT CHECK (status IN ('ACTIVE', 'MAINTENANCE', 'CLOSED')) DEFAULT 'ACTIVE',
-  -- ACTIVE → доступен для бронирования
-  -- MAINTENANCE → временно недоступен
-  -- CLOSED → полностью отключен
-
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- =========================
--- ROOM IMAGES
--- =========================
-CREATE TABLE room_images (
-  image_id SERIAL PRIMARY KEY,
-  room_no TEXT REFERENCES rooms(room_no),
-
-  image_url TEXT NOT NULL,
-  is_main BOOLEAN DEFAULT FALSE,
-
-  uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
--- =========================
--- SERVICES (справочник)
--- =========================
-CREATE TABLE services (
-  service_code TEXT PRIMARY KEY, -- wifi, breakfast, parking, etc
-
-  title TEXT NOT NULL,
-  description TEXT,
-
-  base_price NUMERIC DEFAULT 0,
-  price_type TEXT CHECK (price_type IN ('PER_NIGHT', 'ONE_TIME')),
-
-  icon TEXT,
-  icon_url TEXT,
-
-  is_active BOOLEAN DEFAULT TRUE,
-
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- =========================
--- УСЛУГИ НОМЕРА (что уже есть)
--- =========================
-CREATE TABLE room_services (
-  room_no TEXT REFERENCES rooms(room_no),
-  service_code TEXT REFERENCES services(service_code),
-
-  default_state TEXT CHECK (
-    default_state IN ('INCLUDED', 'OPTIONAL_ON', 'OPTIONAL_OFF')
-  ) NOT NULL,
-  -- INCLUDED     → всегда включено (входит в цену)
-  -- OPTIONAL_ON  → включено, можно отключить
-  -- OPTIONAL_OFF → выключено, можно включить. значит, что не входит в цену номера, но можно добавить как доп услугу
-
-  PRIMARY KEY (room_no, service_code)
-);
-
--- =========================
--- BOOKINGS
--- =========================
-CREATE TABLE bookings (
-  booking_id TEXT PRIMARY KEY,
-
-  username TEXT NOT NULL,
-  room_no TEXT REFERENCES rooms(room_no),
-
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-
-  status TEXT CHECK (
-    status IN ('PENDING', 'CONFIRMED', 'CANCELLED', 'CHECKED_IN', 'CHECKED_OUT')
-  ),
-
-  total_amount NUMERIC NOT NULL,
-
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  notes TEXT
-);
-
--- =========================
--- УСЛУГИ В БРОНИ
--- =========================
-CREATE TABLE booking_services (
-  booking_id TEXT REFERENCES bookings(booking_id),
-  service_code TEXT REFERENCES services(service_code),
-
-  is_enabled BOOLEAN NOT NULL,
-  -- включена ли услуга
-
-  price_snapshot NUMERIC NOT NULL,
-  -- цена зафиксирована на момент брони
-
-  PRIMARY KEY (booking_id, service_code)
-);
-
--- =========================
--- ВРЕМЕННЫЕ БЛОКИРОВКИ
--- =========================
-CREATE TABLE room_locks (
-  lock_id SERIAL PRIMARY KEY,
-
-  room_no TEXT REFERENCES rooms(room_no),
-  locked_by TEXT,
-
-  expires_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- =========================
--- ИНДЕКСЫ
--- =========================
-
-CREATE INDEX idx_bookings_room_dates
-ON bookings(room_no, start_date, end_date);
-
-CREATE INDEX idx_room_locks_active
-ON room_locks(room_no, expires_at);

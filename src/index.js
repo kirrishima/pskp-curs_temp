@@ -11,6 +11,7 @@ const { getConfig, startConfigWatcher } = require('./config');
 const authRoutes = require('./routes/auth');
 const qrRoutes = require('./routes/qr');
 const paymentRoutes = require('./routes/payments');
+const bookingRoutes = require('./routes/bookings');
 const webhookRoutes = require('./routes/webhook');
 const hotelRoutes = require('./routes/hotels');
 const roomRoutes = require('./routes/rooms');
@@ -19,6 +20,8 @@ const roomServiceRoutes = require('./routes/room-services');
 const uploadRoutes = require('./routes/uploads');
 
 const wsManager = require('./services/websocket');
+const { runMigrations } = require('./services/migrate');
+const { scheduleNoShowProcessing } = require('./services/noshow');
 
 const logger = createLogger('Server');
 const app = express();
@@ -41,6 +44,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/services', serviceRoutes);
@@ -69,6 +73,10 @@ app.use((err, _req, res, _next) => {
 // ── Start ───────────────────────────────────────────────────────────────────
 const config = getConfig();
 startConfigWatcher();
+
+// ── Startup tasks (non-blocking) ─────────────────────────────────────────────
+runMigrations().catch((err) => logger.error('Startup migration failed', { error: err.message }));
+scheduleNoShowProcessing();
 
 // Try HTTPS first, fall back to HTTP if certs are missing
 let server;

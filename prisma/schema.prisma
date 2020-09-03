@@ -4,7 +4,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 // ── Enums ───────────────────────────────────────────────────────────────────
@@ -26,6 +27,23 @@ enum BookingStatus {
   CANCELLED
   CHECKED_IN
   CHECKED_OUT
+  NO_SHOW
+}
+
+enum CancellationSource {
+  GUEST
+  ADMIN
+  HOTEL
+  SYSTEM
+}
+
+enum RefundStatus {
+  NONE
+  FULL
+  PARTIAL
+  PENDING
+  FAILED
+  ACTION_REQUIRED
 }
 
 enum RoomServiceState {
@@ -282,6 +300,14 @@ model Booking {
   createdAt   DateTime      @default(now())
   notes       String?
 
+  // ── Cancellation tracking ───────────────────────────────────────────────
+  cancelledAt        DateTime?           @map("cancelled_at")
+  cancelledByUserId  String?             @map("cancelled_by_user_id") @db.Uuid
+  cancellationSource CancellationSource? @map("cancellation_source")
+  cancellationReason String?             @map("cancellation_reason")
+  penaltyAmount      Decimal?            @map("penalty_amount") @db.Decimal(12, 2)
+  refundStatus       RefundStatus        @default(NONE) @map("refund_status")
+
   payment         Payment?
   bookingServices BookingService[]
 
@@ -320,6 +346,12 @@ model Payment {
   booking               Booking       @relation(fields: [bookingId], references: [bookingId])
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
+
+  // ── Stripe refund audit trail ───────────────────────────────────────────
+  stripeChargeId      String?   @map("stripe_charge_id")
+  stripeRefundId      String?   @unique @map("stripe_refund_id")
+  stripeRefundStatus  String?   @map("stripe_refund_status")
+  refundAmount        Decimal?  @map("refund_amount") @db.Decimal(12, 2)
 
   @@index([stripePaymentIntentId])
   @@index([status])
