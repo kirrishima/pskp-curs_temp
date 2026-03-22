@@ -1,0 +1,107 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  tokenVersion  Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  qrCodes       QRCode[]
+  bookings      Booking[]
+}
+
+model RefreshToken {
+  id           String   @id @default(uuid())
+  token        String   @unique
+  tokenVersion Int
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  revoked      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model QRCode {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consumed  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([code])
+  @@index([userId])
+}
+
+// ── Hotel Rooms ──────────────────────────────────────────────────────────────
+model HotelRoom {
+  id            String    @id @default(uuid())
+  number        String    @unique
+  name          String
+  pricePerNight Int
+  locked        Boolean   @default(false)
+  lockedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  bookings      Booking[]
+
+  @@index([locked])
+}
+
+// ── Bookings ─────────────────────────────────────────────────────────────────
+// status: "PENDING" | "CONFIRMED" | "CANCELLED"
+model Booking {
+  id        String    @id @default(uuid())
+  status    String    @default("PENDING")
+  roomId    String
+  room      HotelRoom @relation(fields: [roomId], references: [id])
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  payment   Payment?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([roomId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ── Payments ─────────────────────────────────────────────────────────────────
+// status: "PENDING" | "SUCCEEDED" | "FAILED" | "CANCELLED"
+model Payment {
+  id                    String   @id @default(uuid())
+  stripePaymentIntentId String   @unique
+  amount                Int
+  currency              String   @default("usd")
+  status                String   @default("PENDING")
+  bookingId             String   @unique
+  booking               Booking  @relation(fields: [bookingId], references: [id])
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([stripePaymentIntentId])
+  @@index([status])
+}
+
+// ── Webhook Events (idempotency log) ─────────────────────────────────────────
+model WebhookEvent {
+  id            String   @id @default(uuid())
+  stripeEventId String   @unique
+  type          String
+  processedAt   DateTime @default(now())
+
+  @@index([stripeEventId])
+}

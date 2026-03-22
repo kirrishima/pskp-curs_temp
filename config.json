@@ -1,0 +1,18 @@
+{
+  "accessTokenLifetime": "10m",
+  "refreshTokenLifetime": "7d",
+  "qrCodeLifetime": "120",
+  "jwtSecret": "change-this-to-a-strong-random-secret",
+  "refreshSecret": "change-this-to-another-strong-secret",
+  "port": 3001,
+  "stripeSecretKey": "sk_test_REPLACE_WITH_YOUR_STRIPE_TEST_SECRET_KEY",
+  "stripeWebhookSecret": "whsec_REPLACE_WITH_YOUR_STRIPE_WEBHOOK_SECRET",
+  "logging": {
+    "level": "info",
+    "console": true,
+    "file": true,
+    "filename": "logs/app.log",
+    "maxSize": "10m",
+    "maxFiles": 5
+  }
+}
