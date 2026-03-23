@@ -21,6 +21,7 @@ function loadConfig() {
       refreshSecret: parsed.refreshSecret || 'default-refresh-secret',
       port: parseInt(parsed.port, 10) || 3001,
       stripeSecretKey: parsed.stripeSecretKey || '',
+      stripePublishableKey: parsed.stripePublishableKey || '',
       stripeWebhookSecret: parsed.stripeWebhookSecret || '',
     };
 
@@ -41,6 +42,7 @@ function loadConfig() {
       refreshSecret: 'default-refresh-secret',
       port: 3001,
       stripeSecretKey: '',
+      stripePublishableKey: '',
       stripeWebhookSecret: '',
     };
   }

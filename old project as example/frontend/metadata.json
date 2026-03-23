@@ -1,0 +1,5 @@
+{
+  "name": "Moonglow Hotel Manager",
+  "description": "A luxury hotel booking application interfacing with Oracle Database procedures, featuring an AI concierge.",
+  "requestFramePermissions": []
+}
