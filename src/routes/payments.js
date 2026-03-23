@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Payment & Booking routes
@@ -20,20 +20,21 @@
  *   → Creates a new hotel room.
  */
 
-const { Router } = require('express');
-const { createLogger } = require('../logger');
-const prisma = require('../services/prisma');
-const { getStripe } = require('../services/stripe');
-const { authenticate } = require('../middleware/auth');
+const { Router } = require("express");
+const { createLogger } = require("../logger");
+const { getConfig } = require("../config");
+const prisma = require("../services/prisma");
+const { getStripe } = require("../services/stripe");
+const { authenticate } = require("../middleware/auth");
 
-const logger = createLogger('Payments');
+const logger = createLogger("Payments");
 const router = Router();
 
 // ── List rooms ───────────────────────────────────────────────────────────────
-router.get('/rooms', authenticate, async (req, res) => {
+router.get("/rooms", authenticate, async (req, res) => {
   try {
     const rooms = await prisma.hotelRoom.findMany({
-      orderBy: { number: 'asc' },
+      orderBy: { number: "asc" },
       select: {
         id: true,
         number: true,
@@ -44,17 +45,17 @@ router.get('/rooms', authenticate, async (req, res) => {
     });
     res.json({ rooms });
   } catch (err) {
-    logger.error('Failed to list rooms', { error: err.message });
-    res.status(500).json({ error: 'Failed to list rooms' });
+    logger.error("Failed to list rooms", { error: err.message });
+    res.status(500).json({ error: "Failed to list rooms" });
   }
 });
 
 // ── Seed / create a room (dev helper) ───────────────────────────────────────
-router.post('/rooms', authenticate, async (req, res) => {
+router.post("/rooms", authenticate, async (req, res) => {
   try {
     const { number, name, pricePerNight } = req.body;
     if (!number || !name || !pricePerNight) {
-      return res.status(400).json({ error: 'number, name, and pricePerNight are required' });
+      return res.status(400).json({ error: "number, name, and pricePerNight are required" });
     }
 
     const room = await prisma.hotelRoom.create({
@@ -65,24 +66,30 @@ router.post('/rooms', authenticate, async (req, res) => {
       },
     });
 
-    logger.info('Room created', { roomId: room.id, number: room.number });
+    logger.info("Room created", { roomId: room.id, number: room.number });
     res.status(201).json({ room });
   } catch (err) {
-    if (err.code === 'P2002') {
-      return res.status(409).json({ error: 'Room number already exists' });
+    if (err.code === "P2002") {
+      return res.status(409).json({ error: "Room number already exists" });
     }
-    logger.error('Failed to create room', { error: err.message });
-    res.status(500).json({ error: 'Failed to create room' });
+    logger.error("Failed to create room", { error: err.message });
+    res.status(500).json({ error: "Failed to create room" });
   }
 });
 
+// ── Client config (publishable key) — must be before /:bookingId ─────────────
+router.get('/config', (_req, res) => {
+  const { stripePublishableKey } = getConfig();
+  res.json({ stripePublishableKey });
+});
+
 // ── Create PaymentIntent + Booking ──────────────────────────────────────────
-router.post('/create-intent', authenticate, async (req, res) => {
+router.post("/create-intent", authenticate, async (req, res) => {
   const userId = req.user.id;
-  const { roomId, currency = 'usd' } = req.body;
+  const { roomId, currency = "usd" } = req.body;
 
   if (!roomId) {
-    return res.status(400).json({ error: 'roomId is required' });
+    return res.status(400).json({ error: "roomId is required" });
   }
 
   // Wrap everything in a try so we can return clean error responses
@@ -94,17 +101,17 @@ router.post('/create-intent', authenticate, async (req, res) => {
     // 1. Load the room and verify it is not already locked
     const room = await prisma.hotelRoom.findUnique({ where: { id: roomId } });
     if (!room) {
-      return res.status(404).json({ error: 'Room not found' });
+      return res.status(404).json({ error: "Room not found" });
     }
     if (room.locked) {
-      return res.status(409).json({ error: 'Room is currently reserved. Please try again later.' });
+      return res.status(409).json({ error: "Room is currently reserved. Please try again later." });
     }
 
     // 2. Create Booking (PENDING) + lock room atomically
     const [createdBooking] = await prisma.$transaction([
       prisma.booking.create({
         data: {
-          status: 'PENDING',
+          status: "PENDING",
           roomId: room.id,
           userId,
         },
@@ -116,7 +123,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
     ]);
     booking = createdBooking;
 
-    logger.info('Booking created, room locked', {
+    logger.info("Booking created, room locked", {
       bookingId: booking.id,
       roomId: room.id,
       userId,
@@ -141,12 +148,12 @@ router.post('/create-intent', authenticate, async (req, res) => {
         stripePaymentIntentId: paymentIntent.id,
         amount: room.pricePerNight,
         currency: currency.toLowerCase(),
-        status: 'PENDING',
+        status: "PENDING",
         bookingId: booking.id,
       },
     });
 
-    logger.info('PaymentIntent created', {
+    logger.info("PaymentIntent created", {
       paymentId: payment.id,
       stripeId: paymentIntent.id,
       bookingId: booking.id,
@@ -166,26 +173,26 @@ router.post('/create-intent', authenticate, async (req, res) => {
         await prisma.$transaction([
           prisma.booking.update({
             where: { id: booking.id },
-            data: { status: 'CANCELLED' },
+            data: { status: "CANCELLED" },
           }),
           prisma.hotelRoom.update({
             where: { id: booking.roomId },
             data: { locked: false, lockedAt: null },
           }),
         ]);
-        logger.warn('Rolled back booking and room lock after error', { bookingId: booking.id });
+        logger.warn("Rolled back booking and room lock after error", { bookingId: booking.id });
       } catch (rollbackErr) {
-        logger.error('Rollback failed', { error: rollbackErr.message });
+        logger.error("Rollback failed", { error: rollbackErr.message });
       }
     }
 
-    logger.error('Failed to create payment intent', { error: err.message, stack: err.stack });
-    res.status(500).json({ error: err.message || 'Failed to create payment intent' });
+    logger.error("Failed to create payment intent", { error: err.message, stack: err.stack });
+    res.status(500).json({ error: err.message || "Failed to create payment intent" });
   }
 });
 
 // ── Get booking + payment status ─────────────────────────────────────────────
-router.get('/:bookingId', authenticate, async (req, res) => {
+router.get("/:bookingId", authenticate, async (req, res) => {
   try {
     const { bookingId } = req.params;
 
@@ -210,23 +217,23 @@ router.get('/:bookingId', authenticate, async (req, res) => {
     });
 
     if (!booking) {
-      return res.status(404).json({ error: 'Booking not found' });
+      return res.status(404).json({ error: "Booking not found" });
     }
 
     // Only the owner can see their booking
     if (booking.userId !== req.user.id) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     res.json({ booking });
   } catch (err) {
-    logger.error('Failed to get booking', { error: err.message });
-    res.status(500).json({ error: 'Failed to get booking' });
+    logger.error("Failed to get booking", { error: err.message });
+    res.status(500).json({ error: "Failed to get booking" });
   }
 });
 
 // ── Cancel a pending booking ─────────────────────────────────────────────────
-router.post('/cancel/:bookingId', authenticate, async (req, res) => {
+router.post("/cancel/:bookingId", authenticate, async (req, res) => {
   try {
     const { bookingId } = req.params;
     const stripe = getStripe();
@@ -236,9 +243,9 @@ router.post('/cancel/:bookingId', authenticate, async (req, res) => {
       include: { payment: true },
     });
 
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.userId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-    if (booking.status !== 'PENDING') {
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+    if (booking.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
+    if (booking.status !== "PENDING") {
       return res.status(409).json({ error: `Cannot cancel a booking with status ${booking.status}` });
     }
 
@@ -246,13 +253,13 @@ router.post('/cancel/:bookingId', authenticate, async (req, res) => {
     if (booking.payment) {
       try {
         await stripe.paymentIntents.cancel(booking.payment.stripePaymentIntentId);
-        logger.info('Stripe PaymentIntent cancelled', {
+        logger.info("Stripe PaymentIntent cancelled", {
           stripeId: booking.payment.stripePaymentIntentId,
         });
       } catch (stripeErr) {
         // If already cancelled, that's fine
-        if (stripeErr.code !== 'payment_intent_unexpected_state') {
-          logger.warn('Could not cancel Stripe PaymentIntent', { error: stripeErr.message });
+        if (stripeErr.code !== "payment_intent_unexpected_state") {
+          logger.warn("Could not cancel Stripe PaymentIntent", { error: stripeErr.message });
         }
       }
     }
@@ -261,13 +268,15 @@ router.post('/cancel/:bookingId', authenticate, async (req, res) => {
     await prisma.$transaction([
       prisma.booking.update({
         where: { id: bookingId },
-        data: { status: 'CANCELLED' },
+        data: { status: "CANCELLED" },
       }),
       ...(booking.payment
-        ? [prisma.payment.update({
-            where: { id: booking.payment.id },
-            data: { status: 'CANCELLED' },
-          })]
+        ? [
+            prisma.payment.update({
+              where: { id: booking.payment.id },
+              data: { status: "CANCELLED" },
+            }),
+          ]
         : []),
       prisma.hotelRoom.update({
         where: { id: booking.roomId },
@@ -275,11 +284,11 @@ router.post('/cancel/:bookingId', authenticate, async (req, res) => {
       }),
     ]);
 
-    logger.info('Booking cancelled', { bookingId, userId: req.user.id });
-    res.json({ message: 'Booking cancelled successfully' });
+    logger.info("Booking cancelled", { bookingId, userId: req.user.id });
+    res.json({ message: "Booking cancelled successfully" });
   } catch (err) {
-    logger.error('Failed to cancel booking', { error: err.message });
-    res.status(500).json({ error: 'Failed to cancel booking' });
+    logger.error("Failed to cancel booking", { error: err.message });
+    res.status(500).json({ error: "Failed to cancel booking" });
   }
 });
 

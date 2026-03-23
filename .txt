@@ -1,0 +1,1 @@
+cls & stripe listen --forward-to localhost:3001/api/webhooks/stripe

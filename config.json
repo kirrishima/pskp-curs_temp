@@ -5,8 +5,9 @@
   "jwtSecret": "change-this-to-a-strong-random-secret",
   "refreshSecret": "change-this-to-another-strong-secret",
   "port": 3001,
-  "stripeSecretKey": "sk_test_REPLACE_WITH_YOUR_STRIPE_TEST_SECRET_KEY",
-  "stripeWebhookSecret": "whsec_REPLACE_WITH_YOUR_STRIPE_WEBHOOK_SECRET",
+  "stripeSecretKey": "sk_test_51TBt3V1Z2poqiFCX7vyPu9APHbZ3h5rmRimTPFiQgD0DKQtrcHkNlrCPX6rEsDYV0txjPxPNFSrQgzTQJgwuEMDX00PwK4bKS1",
+  "stripePublishableKey": "pk_test_51TBt3V1Z2poqiFCX3ukS40WybFiZONriOWEPzbiRoq4XErR0FhWd1GhIwmByzs55BBpbOBKeMgZ6oPLj9ayNwakb0091vkQoxS",
+  "stripeWebhookSecret": "whsec_4cd88e89fbb713749d23414765f6202957b0ebf8a93d0159cbb762d9580c168a",
   "logging": {
     "level": "info",
     "console": true,
