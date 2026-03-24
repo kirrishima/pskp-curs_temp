@@ -140,6 +140,12 @@ const RegisterPage = memo(function RegisterPage() {
   const handleSendCode = useCallback(async () => {
     if (!validateFields(['email'])) return;
 
+    // Code was already sent and cooldown is active — just navigate back to code step
+    if (resendCooldown > 0) {
+      goForward('code');
+      return;
+    }
+
     setLoading(true);
     setServerError('');
     try {
@@ -157,7 +163,7 @@ const RegisterPage = memo(function RegisterPage() {
     } finally {
       setLoading(false);
     }
-  }, [email, validateFields, goForward]);
+  }, [email, resendCooldown, validateFields, goForward]);
 
   // ── Resend code ────────────────────────────────────────────────────────
 
@@ -261,13 +267,13 @@ const RegisterPage = memo(function RegisterPage() {
       <div className="w-full max-w-md" onKeyDown={onKeyDown}>
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
           <h2 className="text-2xl font-semibold text-text text-center mb-2">Регистрация</h2>
-          <p className="text-text/50 text-sm text-center mb-6">Создайте аккаунт для бронирования</p>
+          <p className="text-text/50 text-sm text-center mb-6">Создайте аккаунт для полного опыта</p>
 
           {/* ── Step: Email ─────────────────────────────────────────────── */}
           {step === 'email' && (
             <StepWrapper direction={direction}>
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 pl-0 pr-4 py-4 bg-primary/5 rounded-xl mb-2">
+                <div className="flex items-center gap-3 pl-0 pr-4 py-4 bg-primary/10 rounded-xl mb-2">
                   <Mail size={20} className="text-primary flex-shrink-0 ml-3" />
                   <p className="text-sm text-text/70">
                     Введите email для получения кода подтверждения
@@ -316,7 +322,7 @@ const RegisterPage = memo(function RegisterPage() {
           {step === 'code' && (
             <StepWrapper direction={direction}>
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 pl-0 pr-4 py-4 bg-primary/5 rounded-xl mb-2">
+                <div className="flex items-center gap-3 pl-0 pr-4 py-4 bg-primary/10 rounded-xl mb-2">
                   <ShieldCheck size={20} className="text-primary flex-shrink-0 ml-3" />
                   <p className="text-sm text-text/70">
                     Код отправлен на <span className="font-medium text-text">{email}</span>
@@ -375,7 +381,7 @@ const RegisterPage = memo(function RegisterPage() {
           {step === 'details' && (
             <StepWrapper direction={direction}>
               <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 pl-0 pr-4 py-4 bg-primary/5 rounded-xl mb-2">
+                <div className="flex items-center gap-3 pl-0 pr-4 py-4 bg-primary/10 rounded-xl mb-2">
                   <UserPlus size={20} className="text-primary flex-shrink-0 ml-3" />
                   <p className="text-sm text-text/70">Заполните данные для завершения регистрации</p>
                 </div>

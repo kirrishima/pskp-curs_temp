@@ -16,10 +16,10 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 const BASE_INPUT =
   'w-full bg-white border rounded-md text-text placeholder-text/40 text-sm ' +
-  'transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ' +
+  'transition-colors duration-150 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/40 ' +
   'disabled:opacity-50 disabled:cursor-not-allowed';
 
-const NORMAL_BORDER = 'border-gray-200 focus:border-primary';
+const NORMAL_BORDER = 'border-transparent focus:border-primary';
 const ERROR_BORDER  = 'border-red-400 focus:border-red-500';
 
 // ─── Component ───────────────────────────────────────────────────────────────

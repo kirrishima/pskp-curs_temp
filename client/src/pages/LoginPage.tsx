@@ -1,12 +1,13 @@
 import React, { memo, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Eye, EyeOff, QrCode } from 'lucide-react';
 import api from '@/api/axiosInstance';
 import useAppDispatch from '@/hooks/useAppDispatch';
 import { loginSuccess } from '@/store/slices/authSlice';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { validateEmail } from '@/utils/validation';
+import { QRScanModal } from '@/pages/QRLoginPage';
 
 type FieldErrors = Record<string, string>;
 
@@ -19,6 +20,7 @@ const LoginPage = memo(function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [showQRScan, setShowQRScan] = useState(false);
 
   // Per-field errors & touched state
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -73,6 +75,8 @@ const LoginPage = memo(function LoginPage() {
   );
 
   return (
+    <>
+    {showQRScan && <QRScanModal onClose={() => setShowQRScan(false)} />}
     <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] px-4">
       <div className="w-full max-w-md" onKeyDown={onKeyDown}>
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
@@ -133,6 +137,22 @@ const LoginPage = memo(function LoginPage() {
               Войти
             </Button>
 
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-xs text-text/30">или</span>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+
+            <Button
+              variant="secondary"
+              onClick={() => setShowQRScan(true)}
+              icon={<QrCode size={18} />}
+              className="w-full"
+            >
+              Войти по QR-коду
+            </Button>
+
             <p className="text-center text-sm text-text/50 mt-2">
               Нет аккаунта?{' '}
               <Link to="/register" className="text-primary hover:underline font-medium">
@@ -143,6 +163,7 @@ const LoginPage = memo(function LoginPage() {
         </div>
       </div>
     </div>
+    </>
   );
 });
 

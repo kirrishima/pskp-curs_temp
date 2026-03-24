@@ -1,5 +1,6 @@
 import React, { memo, useState, useCallback, useEffect } from 'react';
-import { Phone, Calendar, Globe, Shield, Save, User as UserIcon } from 'lucide-react';
+import { Phone, Calendar, Globe, Shield, Save, User as UserIcon, QrCode } from 'lucide-react';
+import { QRGenerateModal } from '@/pages/QRLoginPage';
 import api from '@/api/axiosInstance';
 import useAppSelector from '@/hooks/useAppSelector';
 import useAppDispatch from '@/hooks/useAppDispatch';
@@ -54,6 +55,8 @@ type FieldErrors = Record<string, string>;
 const ProfilePage = memo(function ProfilePage() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user) as User | null;
+
+  const [showQRGenerate, setShowQRGenerate] = useState(false);
 
   // Editable form state
   const [displayName, setDisplayName] = useState('');
@@ -196,6 +199,8 @@ const ProfilePage = memo(function ProfilePage() {
   const maxDate = getMaxBirthDate();
 
   return (
+    <>
+    {showQRGenerate && <QRGenerateModal onClose={() => setShowQRGenerate(false)} />}
     <div className="max-w-2xl mx-auto px-4 py-8">
       {/* ── Header card ──────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-6">
@@ -367,6 +372,20 @@ const ProfilePage = memo(function ProfilePage() {
         </div>
       </div>
 
+      {/* ── QR login card ────────────────────────────────────────────── */}
+      <div className="mt-6 bg-white rounded-2xl shadow-lg border border-gray-100 p-6 flex items-center gap-4">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <QrCode size={20} className="text-primary" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-text">Вход по QR-коду</p>
+          <p className="text-xs text-text/50 mt-0.5">Войдите на другом устройстве без пароля</p>
+        </div>
+        <Button variant="secondary" onClick={() => setShowQRGenerate(true)}>
+          Показать код
+        </Button>
+      </div>
+
       {/* ── Account info ─────────────────────────────────────────────── */}
       <div className="mt-6 text-center">
         <p className="text-xs text-text/30">
@@ -374,6 +393,7 @@ const ProfilePage = memo(function ProfilePage() {
         </p>
       </div>
     </div>
+    </>
   );
 });
 
