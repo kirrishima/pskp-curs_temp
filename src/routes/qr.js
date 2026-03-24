@@ -35,8 +35,9 @@ router.post('/consume', async (req, res) => {
 
     logger.info('QR code consumed', { userId: result.user.id });
 
+    const { password, tokenVersion, ...safeUser } = result.user;
     res.json({
-      user: { id: result.user.id, email: result.user.email },
+      user: safeUser,
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
     });

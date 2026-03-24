@@ -23,6 +23,8 @@ function loadConfig() {
       stripeSecretKey: parsed.stripeSecretKey || '',
       stripePublishableKey: parsed.stripePublishableKey || '',
       stripeWebhookSecret: parsed.stripeWebhookSecret || '',
+      smtpUser: parsed.smtpUser || '',
+      smtpPass: parsed.smtpPass || '',
     };
 
     logger.info('Loaded', {
@@ -44,6 +46,8 @@ function loadConfig() {
       stripeSecretKey: '',
       stripePublishableKey: '',
       stripeWebhookSecret: '',
+      smtpUser: '',
+      smtpPass: '',
     };
   }
 }

@@ -19,7 +19,10 @@ const app = express();
 app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRoutes);
 
 // ── Standard middleware ───────────────────────────────────────────────────────
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 
 // ── Routes ───────────────────────────────────────────────────────────────────

@@ -40,7 +40,10 @@ async function consumeQRCode(code) {
     data: { consumed: true },
   });
 
-  const user = await prisma.user.findUnique({ where: { id: qr.userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: qr.userId },
+    include: { role: true },
+  });
   if (!user) throw new Error('User not found');
 
   const accessToken = signAccessToken(user);

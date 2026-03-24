@@ -7,16 +7,53 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ── Roles ──────────────────────────────────────────────────────────────────
+model Role {
+  id    String @id @default(uuid())
+  name  String @unique // "user" | "manager" | "admin"
+  users User[]
+}
+
+// ── Users ──────────────────────────────────────────────────────────────────
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
+  id            String   @id @default(uuid())
+  email         String   @unique
   password      String
-  tokenVersion  Int            @default(0)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  firstName     String   // Latin only, required at registration
+  lastName      String   // Latin only, required at registration
+  tokenVersion  Int      @default(0)
+
+  // Optional profile fields (filled after registration)
+  phone         String?
+  birthDate     DateTime?
+  gender        String?   // "male" | "female" | "other"
+  citizenship   String?
+  displayName   String?   // shown in reviews/comments
+
+  // Role
+  roleId        String
+  role          Role     @relation(fields: [roleId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   refreshTokens RefreshToken[]
   qrCodes       QRCode[]
   bookings      Booking[]
+
+  @@index([roleId])
+}
+
+// ── Email Verification Codes ───────────────────────────────────────────────
+model EmailVerification {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, code])
 }
 
 model RefreshToken {

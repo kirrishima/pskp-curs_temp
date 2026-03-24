@@ -8,6 +8,8 @@
   "stripeSecretKey": "sk_test_51TBt3V1Z2poqiFCX7vyPu9APHbZ3h5rmRimTPFiQgD0DKQtrcHkNlrCPX6rEsDYV0txjPxPNFSrQgzTQJgwuEMDX00PwK4bKS1",
   "stripePublishableKey": "pk_test_51TBt3V1Z2poqiFCX3ukS40WybFiZONriOWEPzbiRoq4XErR0FhWd1GhIwmByzs55BBpbOBKeMgZ6oPLj9ayNwakb0091vkQoxS",
   "stripeWebhookSecret": "whsec_4cd88e89fbb713749d23414765f6202957b0ebf8a93d0159cbb762d9580c168a",
+  "smtpUser": "maxfunmaxfun672@gmail.com",
+  "smtpPass": "xwsx ztam opmj jpog",
   "logging": {
     "level": "info",
     "console": true,

@@ -11,7 +11,7 @@ const { getConfig, getRefreshTokenExpiresAt } = require('../config');
 function signAccessToken(user) {
   const config = getConfig();
   return jwt.sign(
-    { sub: user.id, email: user.email, tokenVersion: user.tokenVersion },
+    { sub: user.id, email: user.email, roleId: user.roleId, tokenVersion: user.tokenVersion },
     config.jwtSecret,
     { expiresIn: config.accessTokenLifetime }
   );

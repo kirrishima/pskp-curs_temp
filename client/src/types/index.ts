@@ -1,14 +1,29 @@
+// ─── Role ────────────────────────────────────────────────────────────────────
+
+export interface Role {
+  id: string;
+  name: 'user' | 'manager' | 'admin';
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface User {
-  id: number;
-  username: string;
-  fullName: string;
+  id: string;
   email: string;
-  roleId: number;
-  phone?: string;
-  accountStatus?: string;
+  firstName: string;
+  lastName: string;
+  roleId: string;
+  role: Role;
+
+  // Optional profile fields
+  phone?: string | null;
+  birthDate?: string | null;
+  gender?: 'male' | 'female' | 'other' | null;
+  citizenship?: string | null;
+  displayName?: string | null;
+
   createdAt?: string;
+  updatedAt?: string;
 }
 
 // Tokens returned by the server on login / refresh
