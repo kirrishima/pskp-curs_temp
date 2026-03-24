@@ -18,17 +18,114 @@ import Button from "@/components/ui/Button";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Build a Google Charts QR image URL for a given text. */
-function qrImageUrl(text: string, size = 220): string {
-  return `https://chart.googleapis.com/chart?cht=qr&chs=${size}x${size}&chl=${encodeURIComponent(text)}&choe=UTF-8`;
-}
-
 /** Format remaining seconds as MM:SS */
 function fmtTime(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+// ─── Styled QR Code (qr-code-styling via CDN) ────────────────────────────────
+
+const QR_LIB_SRC = "https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js";
+const QR_SCRIPT_ID = "qr-code-styling-cdn";
+
+/** Loads the qr-code-styling script from CDN once across all instances. */
+function ensureQrLibLoaded(): Promise<void> {
+  if ((window as any).QRCodeStyling) return Promise.resolve();
+  const existing = document.getElementById(QR_SCRIPT_ID);
+  if (existing) {
+    // Already injected — wait for it
+    return new Promise((resolve) => {
+      const check = setInterval(() => {
+        if ((window as any).QRCodeStyling) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 40);
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.id = QR_SCRIPT_ID;
+    script.src = QR_LIB_SRC;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load qr-code-styling"));
+    document.head.appendChild(script);
+  });
+}
+
+interface StyledQRCodeProps {
+  data: string;
+  size?: number;
+  faded?: boolean;
+}
+
+const StyledQRCode = memo(function StyledQRCode({ data, size = 220, faded = false }: StyledQRCodeProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!data || !containerRef.current) return;
+
+    let cancelled = false;
+
+    ensureQrLibLoaded().then(() => {
+      if (cancelled || !containerRef.current) return;
+
+      const QRCodeStyling = (window as any).QRCodeStyling;
+      containerRef.current.innerHTML = "";
+
+      const qr = new QRCodeStyling({
+        width: size,
+        height: size,
+        type: "svg",
+        data,
+        // Логотип из favicon проекта
+        image: "/favicon.ico",
+        qrOptions: {
+          // H — высокий уровень коррекции, обязателен для логотипа
+          errorCorrectionLevel: "H",
+        },
+        dotsOptions: {
+          color: "#42ACC1", // primary
+          type: "rounded",
+        },
+        backgroundOptions: {
+          color: "#ffffff",
+        },
+        imageOptions: {
+          crossOrigin: "anonymous",
+          margin: 5,
+          imageSize: 0.28,
+        },
+        cornersSquareOptions: {
+          color: "#42ACC1", // primary
+          type: "extra-rounded",
+        },
+        cornersDotOptions: {
+          color: "#8DD0DD", // secondary
+        },
+      });
+
+      qr.append(containerRef.current);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data, size]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={[
+        "rounded-xl border-2 border-primary/20 overflow-hidden transition-opacity duration-300 bg-white",
+        faded ? "opacity-20" : "opacity-100",
+      ].join(" ")}
+      style={{ width: size, height: size }}
+    />
+  );
+});
 
 // ─── QR Generate panel ───────────────────────────────────────────────────────
 
@@ -77,30 +174,26 @@ const QRGeneratePanel = memo(function QRGeneratePanel() {
         <span>Покажите этот код другому устройству для входа</span>
       </div>
 
-      {/* QR image */}
+      {/* QR block */}
       <div className="relative">
-        {code && (
-          <img
-            src={qrImageUrl(code)}
-            alt="QR code"
-            width={220}
-            height={220}
-            className={[
-              "rounded-xl border-2 border-primary/20 transition-opacity duration-300",
-              expired ? "opacity-20" : "opacity-100",
-            ].join(" ")}
-          />
-        )}
+        {/* Spinner while fetching code */}
         {!code && !error && (
           <div className="w-[220px] h-[220px] rounded-xl bg-gray-50 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
           </div>
         )}
+
+        {/* Styled QR with site colors + logo */}
+        {code && <StyledQRCode data={code} size={220} faded={expired} />}
+
+        {/* Expired overlay */}
         {expired && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl">
             <p className="text-sm font-medium text-text/60">Код истёк</p>
           </div>
         )}
+
+        {/* Success overlay */}
         {done && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
             <CheckCircle size={48} className="text-green-500" />
@@ -186,6 +279,7 @@ const QRScanPanel = memo(function QRScanPanel({ onClose }: { onClose: () => void
       setStatus("scanning");
       setError("");
       try {
+        console.log(rawCode);
         const { data } = await api.post("/qr/consume", { code: rawCode });
         dispatch(
           loginSuccess({

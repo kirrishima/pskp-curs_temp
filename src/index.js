@@ -1,6 +1,6 @@
 'use strict';
 
-const http = require('http');
+const https = require('https');
 const express = require('express');
 const cors = require('cors');
 const { createLogger } = require('./logger');
@@ -10,7 +10,7 @@ const qrRoutes = require('./routes/qr');
 const paymentRoutes = require('./routes/payments');
 const webhookRoutes = require('./routes/webhook');
 const wsManager = require('./services/websocket');
-
+const fs = require('fs');
 const logger = createLogger('Server');
 const app = express();
 
@@ -19,10 +19,14 @@ const app = express();
 app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRoutes);
 
 // ── Standard middleware ───────────────────────────────────────────────────────
-app.use(cors({
-  origin: 'https://localhost:3000',
-  credentials: true
-}));
+const corsOptions = {
+  origin: true, // 👈 временно, потом сузим
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("/api/*", cors(corsOptions));
+
 app.use(express.json());
 
 // ── Routes ───────────────────────────────────────────────────────────────────
@@ -54,8 +58,22 @@ app.use((err, _req, res, _next) => {
 const config = getConfig();
 startConfigWatcher();
 
+const httpsOptions = {
+  key: fs.readFileSync('./client/cer/moonglow.key'),
+  cert: fs.readFileSync('./client/cer/moonglow.crt'),
+};
+console.log(httpsOptions)
 // Use http.Server so we can share it with the WebSocket server
-const server = http.createServer(app);
+const server = https.createServer(httpsOptions, app);
+
+// Attach WebSocket (wss будет работать автоматически)
+wsManager.init(server);
+
+// Слушаем на 0.0.0.0, чтобы другие устройства в сети могли подключаться
+server.listen(config.port, '0.0.0.0', () => {
+  logger.info(`Running on https://localhost:${config.port}`);
+  logger.info(`WebSocket available at wss://localhost:${config.port}/ws`);
+});
 
 // Attach WebSocket (gracefully degrades if `ws` is not installed yet)
 wsManager.init(server);
