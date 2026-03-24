@@ -25,3 +25,4 @@ dist-ssr
 .vite/deps/
 .zip
 node_modules/
+client/package-lock.json
