@@ -18,3 +18,167 @@ start "" cmd /c "cd client && npm install"
 Поля ввода должны быть все равно с обводкой даже при отсутствии фокуса, просто при фокусе она должно пропадать и отображаться другая, для именно выделения поля при фокусе. 
 404. That’s an error.
 The requested URL /chart was not found on this server. That’s all we know. Изображение qr code не рендериться так как ты использовал некоерктную ссылку. можно использовать https://api.qrserver.com/v1/create-qr-code/
+
+
+
+-- =========================
+-- HOTELS
+-- =========================
+CREATE TABLE hotels (
+  hotel_code TEXT PRIMARY KEY, -- Уникальный код отеля
+  name TEXT NOT NULL,
+  description TEXT,
+  city TEXT,
+  address TEXT,
+  phone TEXT,
+  email TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- =========================
+-- ROOMS
+-- =========================
+CREATE TABLE rooms (
+  room_no TEXT PRIMARY KEY, -- Номер комнаты
+  hotel_code TEXT NOT NULL REFERENCES hotels(hotel_code),
+
+  title TEXT NOT NULL,
+  description TEXT,
+
+  capacity INT NOT NULL, -- сколько человек
+  beds_count INT NOT NULL, -- количество кроватей
+  floor INT,
+
+  area NUMERIC, -- площадь (м²)
+
+  base_price NUMERIC NOT NULL,
+
+  status TEXT CHECK (status IN ('ACTIVE', 'MAINTENANCE', 'CLOSED')) DEFAULT 'ACTIVE',
+  -- ACTIVE → доступен для бронирования
+  -- MAINTENANCE → временно недоступен
+  -- CLOSED → полностью отключен
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =========================
+-- ROOM IMAGES
+-- =========================
+CREATE TABLE room_images (
+  image_id SERIAL PRIMARY KEY,
+  room_no TEXT REFERENCES rooms(room_no),
+
+  image_url TEXT NOT NULL,
+  is_main BOOLEAN DEFAULT FALSE,
+
+  uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- =========================
+-- SERVICES (справочник)
+-- =========================
+CREATE TABLE services (
+  service_code TEXT PRIMARY KEY, -- wifi, breakfast, parking
+
+  title TEXT NOT NULL,
+  description TEXT,
+
+  base_price NUMERIC DEFAULT 0,
+  price_type TEXT CHECK (price_type IN ('PER_NIGHT', 'ONE_TIME')),
+
+  icon TEXT,
+  icon_url TEXT,
+
+  is_active BOOLEAN DEFAULT TRUE,
+
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =========================
+-- УСЛУГИ НОМЕРА (что уже есть)
+-- =========================
+CREATE TABLE room_services (
+  room_no TEXT REFERENCES rooms(room_no),
+  service_code TEXT REFERENCES services(service_code),
+
+  default_state TEXT CHECK (
+    default_state IN ('INCLUDED', 'OPTIONAL_ON', 'OPTIONAL_OFF')
+  ) NOT NULL,
+  -- INCLUDED     → всегда включено (входит в цену)
+  -- OPTIONAL_ON  → включено, можно отключить
+  -- OPTIONAL_OFF → выключено, можно включить
+
+  PRIMARY KEY (room_no, service_code)
+);
+
+-- =========================
+-- ДОСТУПНЫЕ ДЛЯ ДОБАВЛЕНИЯ
+-- =========================
+CREATE TABLE room_allowed_services (
+  room_no TEXT REFERENCES rooms(room_no),
+  service_code TEXT REFERENCES services(service_code),
+
+  PRIMARY KEY (room_no, service_code)
+  -- Эти услуги НЕ входят в номер, но их можно добавить
+);
+
+-- =========================
+-- BOOKINGS
+-- =========================
+CREATE TABLE bookings (
+  booking_id TEXT PRIMARY KEY,
+
+  username TEXT NOT NULL,
+  room_no TEXT REFERENCES rooms(room_no),
+
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+
+  status TEXT CHECK (
+    status IN ('PENDING', 'CONFIRMED', 'CANCELLED', 'CHECKED_IN', 'CHECKED_OUT')
+  ),
+
+  total_amount NUMERIC NOT NULL,
+
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  notes TEXT
+);
+
+-- =========================
+-- УСЛУГИ В БРОНИ
+-- =========================
+CREATE TABLE booking_services (
+  booking_id TEXT REFERENCES bookings(booking_id),
+  service_code TEXT REFERENCES services(service_code),
+
+  is_enabled BOOLEAN NOT NULL,
+  -- включена ли услуга
+
+  price_snapshot NUMERIC NOT NULL,
+  -- цена зафиксирована на момент брони
+
+  PRIMARY KEY (booking_id, service_code)
+);
+
+-- =========================
+-- ВРЕМЕННЫЕ БЛОКИРОВКИ
+-- =========================
+CREATE TABLE room_locks (
+  lock_id SERIAL PRIMARY KEY,
+
+  room_no TEXT REFERENCES rooms(room_no),
+  locked_by TEXT,
+
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =========================
+-- ИНДЕКСЫ
+-- =========================
+
+CREATE INDEX idx_bookings_room_dates
+ON bookings(room_no, start_date, end_date);
+
+CREATE INDEX idx_room_locks_active
+ON room_locks(room_no, expires_at);
