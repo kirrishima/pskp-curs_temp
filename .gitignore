@@ -28,7 +28,7 @@ node_modules/
 client/package-lock.json
 
 # Environment
-.env
+# .env
 
 # Prisma SQLite (no longer used)
 prisma/dev.db

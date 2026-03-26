@@ -10,17 +10,11 @@ import api from '@/api/axiosInstance';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ProfilePage from '@/pages/ProfilePage';
-import RoomsPage from '@/pages/RoomsPage';
-
-// ─── Page placeholder ─────────────────────────────────────────────────────────
-
-const PlaceholderPage = memo(function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <p className="text-text/50 text-lg">{title}</p>
-    </div>
-  );
-});
+import RoomSearchPage from '@/pages/RoomSearchPage';
+import RoomDetailsPage from '@/pages/RoomDetailsPage';
+import RoomEditorPage from '@/pages/RoomEditorPage';
+import ServicesPage from '@/pages/ServicesPage';
+import HotelsPage from '@/pages/HotelsPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
 
@@ -30,9 +24,16 @@ const ProtectedRoute = memo(function ProtectedRoute({ children }: { children: Re
   return children;
 });
 
+const AdminRoute = memo(function AdminRoute({ children }: { children: React.ReactElement }) {
+  const user = useAppSelector((s) => s.auth.user);
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role?.name !== 'admin') return <Navigate to="/" replace />;
+  return children;
+});
+
 const GuestRoute = memo(function GuestRoute({ children }: { children: React.ReactElement }) {
   const user = useAppSelector((s) => s.auth.user);
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/rooms" replace />;
   return children;
 });
 
@@ -46,7 +47,6 @@ const UserMenu = memo(function UserMenu() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -63,7 +63,7 @@ const UserMenu = memo(function UserMenu() {
     try {
       await api.post('/auth/logout', { refreshToken });
     } catch {
-      // Ignore — we'll clear locally anyway
+      // Ignore — clear locally
     }
     dispatch(logout());
     navigate('/', { replace: true });
@@ -141,6 +141,9 @@ const UserMenu = memo(function UserMenu() {
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 function AppContent() {
+  const user = useAppSelector((s) => s.auth.user);
+  const isAdmin = user?.role?.name === 'admin';
+
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 h-16 flex items-center justify-between px-8 shadow-sm">
@@ -152,6 +155,16 @@ function AppContent() {
             <Link to="/rooms" className="text-sm text-text/60 hover:text-text transition-colors">
               Номера
             </Link>
+            {isAdmin && (
+              <>
+                <Link to="/admin/hotels" className="text-sm text-text/60 hover:text-text transition-colors">
+                  Отели
+                </Link>
+                <Link to="/admin/services" className="text-sm text-text/60 hover:text-text transition-colors">
+                  Услуги
+                </Link>
+              </>
+            )}
           </nav>
         </div>
         <UserMenu />
@@ -159,37 +172,25 @@ function AppContent() {
 
       <main className="flex-grow">
         <Routes>
-          {/* Public — accessible to everyone */}
-          <Route path="/" element={<PlaceholderPage title="Главная страница" />} />
-          <Route path="/rooms" element={<RoomsPage />} />
+          {/* Root → catalog */}
+          <Route path="/" element={<Navigate to="/rooms" replace />} />
 
-          {/* Guest only (redirect to / if logged in) */}
-          <Route
-            path="/login"
-            element={
-              <GuestRoute>
-                <LoginPage />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <GuestRoute>
-                <RegisterPage />
-              </GuestRoute>
-            }
-          />
+          {/* Public */}
+          <Route path="/rooms" element={<RoomSearchPage />} />
+          <Route path="/rooms/:roomNo" element={<RoomDetailsPage />} />
 
-          {/* Protected (requires login) */}
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Guest only */}
+          <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+          <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+
+          {/* Protected */}
+          <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+
+          {/* Admin */}
+          <Route path="/admin/rooms/new" element={<AdminRoute><RoomEditorPage /></AdminRoute>} />
+          <Route path="/admin/rooms/:roomNo" element={<AdminRoute><RoomEditorPage /></AdminRoute>} />
+          <Route path="/admin/hotels" element={<AdminRoute><HotelsPage /></AdminRoute>} />
+          <Route path="/admin/services" element={<AdminRoute><ServicesPage /></AdminRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

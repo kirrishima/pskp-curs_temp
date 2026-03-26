@@ -16,6 +16,7 @@ const hotelRoutes = require('./routes/hotels');
 const roomRoutes = require('./routes/rooms');
 const serviceRoutes = require('./routes/services');
 const roomServiceRoutes = require('./routes/room-services');
+const uploadRoutes = require('./routes/uploads');
 
 const wsManager = require('./services/websocket');
 
@@ -44,6 +45,11 @@ app.use('/api/hotels', hotelRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/room-services', roomServiceRoutes);
+app.use('/api/uploads', uploadRoutes);
+
+// ── Static file serving for uploaded images ──────────────────────────────────
+const path = require('path');
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // ── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
