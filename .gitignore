@@ -26,3 +26,9 @@ dist-ssr
 .zip
 node_modules/
 client/package-lock.json
+
+# Environment
+.env
+
+# Prisma SQLite (no longer used)
+prisma/dev.db

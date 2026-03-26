@@ -1,16 +1,24 @@
 'use strict';
 
 const https = require('https');
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const { createLogger } = require('./logger');
 const { getConfig, startConfigWatcher } = require('./config');
+
 const authRoutes = require('./routes/auth');
 const qrRoutes = require('./routes/qr');
 const paymentRoutes = require('./routes/payments');
 const webhookRoutes = require('./routes/webhook');
+const hotelRoutes = require('./routes/hotels');
+const roomRoutes = require('./routes/rooms');
+const serviceRoutes = require('./routes/services');
+const roomServiceRoutes = require('./routes/room-services');
+
 const wsManager = require('./services/websocket');
-const fs = require('fs');
+
 const logger = createLogger('Server');
 const app = express();
 
@@ -20,26 +28,24 @@ app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRoute
 
 // ── Standard middleware ───────────────────────────────────────────────────────
 const corsOptions = {
-  origin: true, // 👈 временно, потом сузим
+  origin: true,
   credentials: true,
 };
 
 app.use(cors(corsOptions));
-app.options("/api/*", cors(corsOptions));
-
+app.options('/api/*', cors(corsOptions));
 app.use(express.json());
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/qr', qrRoutes);
-// Payments + room management share one router.
-// Room endpoints: GET/POST /api/payments/rooms
-// Booking endpoints: POST /api/payments/create-intent
-//                    GET  /api/payments/:bookingId
-//                    POST /api/payments/cancel/:bookingId
 app.use('/api/payments', paymentRoutes);
+app.use('/api/hotels', hotelRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/services', serviceRoutes);
+app.use('/api/room-services', roomServiceRoutes);
 
-// ── Health check ──────────────────────────────────────────────────────────────
+// ── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -48,39 +54,43 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// ── Global error handler ──────────────────────────────────────────────────────
+// ── Global error handler ────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   logger.error('Unhandled express error', { error: err.message, stack: err.stack });
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
+// ── Start ───────────────────────────────────────────────────────────────────
 const config = getConfig();
 startConfigWatcher();
 
-const httpsOptions = {
-  key: fs.readFileSync('./client/cer/moonglow.key'),
-  cert: fs.readFileSync('./client/cer/moonglow.crt'),
-};
-console.log(httpsOptions)
-// Use http.Server so we can share it with the WebSocket server
-const server = https.createServer(httpsOptions, app);
+// Try HTTPS first, fall back to HTTP if certs are missing
+let server;
 
-// Attach WebSocket (wss будет работать автоматически)
-wsManager.init(server);
+const certKeyPath = './client/cer/moonglow.key';
+const certCrtPath = './client/cer/moonglow.crt';
 
-// Слушаем на 0.0.0.0, чтобы другие устройства в сети могли подключаться
-server.listen(config.port, '0.0.0.0', () => {
-  logger.info(`Running on https://localhost:${config.port}`);
-  logger.info(`WebSocket available at wss://localhost:${config.port}/ws`);
-});
+if (fs.existsSync(certKeyPath) && fs.existsSync(certCrtPath)) {
+  const httpsOptions = {
+    key: fs.readFileSync(certKeyPath),
+    cert: fs.readFileSync(certCrtPath),
+  };
+  server = https.createServer(httpsOptions, app);
+  wsManager.init(server);
 
-// Attach WebSocket (gracefully degrades if `ws` is not installed yet)
-wsManager.init(server);
+  server.listen(config.port, '0.0.0.0', () => {
+    logger.info(`Running on https://localhost:${config.port}`);
+    logger.info(`WebSocket available at wss://localhost:${config.port}/ws`);
+  });
+} else {
+  logger.warn('SSL certificates not found, starting HTTP server');
+  server = http.createServer(app);
+  wsManager.init(server);
 
-server.listen(config.port, () => {
-  logger.info(`Running on http://localhost:${config.port}`);
-  logger.info(`WebSocket available at ws://localhost:${config.port}/ws`);
-});
+  server.listen(config.port, '0.0.0.0', () => {
+    logger.info(`Running on http://localhost:${config.port}`);
+    logger.info(`WebSocket available at ws://localhost:${config.port}/ws`);
+  });
+}
 
 module.exports = app;

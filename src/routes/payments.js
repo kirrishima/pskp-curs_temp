@@ -1,203 +1,295 @@
-"use strict";
+'use strict';
 
 /**
- * Payment & Booking routes
+ * Payment & Booking routes (adapted for the new schema)
  *
  * POST /api/payments/create-intent
- *   → Creates a Booking (PENDING), locks the HotelRoom, creates a Stripe
- *     PaymentIntent, saves a Payment record. Returns the client_secret.
+ *   -> Creates a RoomHold, then a Booking with BookingServices,
+ *      then a Stripe PaymentIntent + Payment record.
  *
  * GET  /api/payments/:bookingId
- *   → Returns the Payment + Booking status for a given booking.
+ *   -> Returns the Payment + Booking status.
  *
  * POST /api/payments/cancel/:bookingId
- *   → Cancels a pending payment, releases the room lock, cancels the booking.
+ *   -> Cancels a pending payment, marks hold as CANCELLED, cancels booking.
  *
- * GET  /api/rooms
- *   → Lists all hotel rooms (with availability).
- *
- * POST /api/rooms  (admin convenience – seed rooms during development)
- *   → Creates a new hotel room.
+ * GET  /api/payments/config
+ *   -> Returns the Stripe publishable key.
  */
 
-const { Router } = require("express");
-const { createLogger } = require("../logger");
-const { getConfig } = require("../config");
-const prisma = require("../services/prisma");
-const { getStripe } = require("../services/stripe");
-const { authenticate } = require("../middleware/auth");
+const { Router } = require('express');
+const { v4: uuidv4 } = require('uuid');
+const { createLogger } = require('../logger');
+const { getConfig } = require('../config');
+const prisma = require('../services/prisma');
+const { getStripe } = require('../services/stripe');
+const { authenticate } = require('../middleware/auth');
 
-const logger = createLogger("Payments");
+const logger = createLogger('Payments');
 const router = Router();
 
-// ── List rooms ───────────────────────────────────────────────────────────────
-router.get("/rooms", authenticate, async (req, res) => {
-  try {
-    const rooms = await prisma.hotelRoom.findMany({
-      orderBy: { number: "asc" },
-      select: {
-        id: true,
-        number: true,
-        name: true,
-        pricePerNight: true,
-        locked: true,
-      },
-    });
-    res.json({ rooms });
-  } catch (err) {
-    logger.error("Failed to list rooms", { error: err.message });
-    res.status(500).json({ error: "Failed to list rooms" });
-  }
-});
+const HOLD_DURATION_MINUTES = 30;
 
-// ── Seed / create a room (dev helper) ───────────────────────────────────────
-router.post("/rooms", authenticate, async (req, res) => {
-  try {
-    const { number, name, pricePerNight } = req.body;
-    if (!number || !name || !pricePerNight) {
-      return res.status(400).json({ error: "number, name, and pricePerNight are required" });
-    }
+// ── Client config (publishable key) — must be before /:bookingId ────────────
 
-    const room = await prisma.hotelRoom.create({
-      data: {
-        number: String(number),
-        name,
-        pricePerNight: parseInt(pricePerNight, 10), // cents
-      },
-    });
-
-    logger.info("Room created", { roomId: room.id, number: room.number });
-    res.status(201).json({ room });
-  } catch (err) {
-    if (err.code === "P2002") {
-      return res.status(409).json({ error: "Room number already exists" });
-    }
-    logger.error("Failed to create room", { error: err.message });
-    res.status(500).json({ error: "Failed to create room" });
-  }
-});
-
-// ── Client config (publishable key) — must be before /:bookingId ─────────────
 router.get('/config', (_req, res) => {
   const { stripePublishableKey } = getConfig();
   res.json({ stripePublishableKey });
 });
 
 // ── Create PaymentIntent + Booking ──────────────────────────────────────────
-router.post("/create-intent", authenticate, async (req, res) => {
-  const userId = req.user.id;
-  const { roomId, currency = "usd" } = req.body;
 
-  if (!roomId) {
-    return res.status(400).json({ error: "roomId is required" });
+router.post('/create-intent', authenticate, async (req, res) => {
+  const userId = req.user.id;
+  const { roomNo, checkIn, checkOut, currency = 'usd', selectedServices, notes } = req.body;
+
+  // ── Validate inputs ─────────────────────────────────────────────────────
+
+  if (!roomNo) return res.status(400).json({ error: 'roomNo is required' });
+  if (!checkIn || !checkOut) return res.status(400).json({ error: 'checkIn and checkOut are required' });
+
+  const startDate = new Date(checkIn);
+  const endDate = new Date(checkOut);
+
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return res.status(400).json({ error: 'Invalid date format' });
+  }
+  if (startDate >= endDate) {
+    return res.status(400).json({ error: 'checkOut must be after checkIn' });
   }
 
-  // Wrap everything in a try so we can return clean error responses
   let booking = null;
+  let hold = null;
 
   try {
     const stripe = getStripe();
 
-    // 1. Load the room and verify it is not already locked
-    const room = await prisma.hotelRoom.findUnique({ where: { id: roomId } });
-    if (!room) {
-      return res.status(404).json({ error: "Room not found" });
-    }
-    if (room.locked) {
-      return res.status(409).json({ error: "Room is currently reserved. Please try again later." });
-    }
-
-    // 2. Create Booking (PENDING) + lock room atomically
-    const [createdBooking] = await prisma.$transaction([
-      prisma.booking.create({
-        data: {
-          status: "PENDING",
-          roomId: room.id,
-          userId,
-        },
-      }),
-      prisma.hotelRoom.update({
-        where: { id: room.id },
-        data: { locked: true, lockedAt: new Date() },
-      }),
-    ]);
-    booking = createdBooking;
-
-    logger.info("Booking created, room locked", {
-      bookingId: booking.id,
-      roomId: room.id,
-      userId,
-    });
-
-    // 3. Create Stripe PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: room.pricePerNight,
-      currency: currency.toLowerCase(),
-      metadata: {
-        bookingId: booking.id,
-        roomId: room.id,
-        userId,
-      },
-      // Automatically cancel after 30 minutes if not paid
-      // (requires Stripe dashboard payment_intent.canceled webhook event)
-    });
-
-    // 4. Persist the Payment record
-    const payment = await prisma.payment.create({
-      data: {
-        stripePaymentIntentId: paymentIntent.id,
-        amount: room.pricePerNight,
-        currency: currency.toLowerCase(),
-        status: "PENDING",
-        bookingId: booking.id,
+    // 1. Load the room
+    const room = await prisma.room.findUnique({
+      where: { roomNo },
+      include: {
+        roomServices: { include: { service: true } },
       },
     });
 
-    logger.info("PaymentIntent created", {
-      paymentId: payment.id,
-      stripeId: paymentIntent.id,
-      bookingId: booking.id,
-    });
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    if (room.status !== 'ACTIVE') {
+      return res.status(409).json({ error: 'Room is not available for booking' });
+    }
 
-    res.status(201).json({
-      bookingId: booking.id,
-      paymentId: payment.id,
-      clientSecret: paymentIntent.client_secret,
-      amount: room.pricePerNight,
-      currency,
+    // 2. Check for overlapping bookings (non-cancelled)
+    const overlap = await prisma.booking.findFirst({
+      where: {
+        roomNo,
+        status: { notIn: ['CANCELLED'] },
+        startDate: { lt: endDate },
+        endDate: { gt: startDate },
+      },
     });
-  } catch (err) {
-    // If something went wrong after we created the booking, roll back the lock
-    if (booking) {
-      try {
-        await prisma.$transaction([
-          prisma.booking.update({
-            where: { id: booking.id },
-            data: { status: "CANCELLED" },
-          }),
-          prisma.hotelRoom.update({
-            where: { id: booking.roomId },
-            data: { locked: false, lockedAt: null },
-          }),
-        ]);
-        logger.warn("Rolled back booking and room lock after error", { bookingId: booking.id });
-      } catch (rollbackErr) {
-        logger.error("Rollback failed", { error: rollbackErr.message });
+    if (overlap) {
+      return res.status(409).json({ error: 'Room is already booked for the selected dates' });
+    }
+
+    // Also check active holds from other users
+    const holdOverlap = await prisma.roomHold.findFirst({
+      where: {
+        roomNo,
+        status: 'ACTIVE',
+        userId: { not: userId },
+        startDate: { lt: endDate },
+        endDate: { gt: startDate },
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (holdOverlap) {
+      return res.status(409).json({ error: 'Room is currently being reserved by another user' });
+    }
+
+    // 3. Calculate nights
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const nights = Math.ceil((endDate.getTime() - startDate.getTime()) / msPerDay);
+
+    // 4. Calculate total amount based on room price and services
+    let totalAmount = Number(room.basePrice) * nights;
+
+    // Build booking_services list based on room_services defaults + user selections
+    const bookingServicesData = [];
+    const serviceMap = new Map(
+      room.roomServices.map((rs) => [rs.serviceCode, rs])
+    );
+
+    // selectedServices: { "WIFI": true, "BREAKFAST": false, ... }
+    // If not provided, use defaults
+    const selections = selectedServices || {};
+
+    for (const [code, rs] of serviceMap) {
+      const service = rs.service;
+      if (!service.isActive) continue;
+
+      let include = false;
+      let sourceState = rs.defaultState;
+
+      if (rs.defaultState === 'INCLUDED') {
+        // Always included, cannot be removed
+        include = true;
+      } else if (rs.defaultState === 'OPTIONAL_ON') {
+        // Included by default; user can opt out
+        include = selections[code] !== false;
+      } else if (rs.defaultState === 'OPTIONAL_OFF') {
+        // Not included by default; user can opt in
+        include = selections[code] === true;
+      }
+
+      if (include) {
+        const servicePrice = Number(service.basePrice);
+        const priceForBooking =
+          service.priceType === 'PER_NIGHT' ? servicePrice * nights : servicePrice;
+
+        totalAmount += priceForBooking;
+
+        bookingServicesData.push({
+          serviceCode: code,
+          sourceState,
+          priceSnapshot: priceForBooking,
+        });
       }
     }
 
-    logger.error("Failed to create payment intent", { error: err.message, stack: err.stack });
-    res.status(500).json({ error: err.message || "Failed to create payment intent" });
+    // 5. Create RoomHold + Booking + BookingServices in transaction
+    const holdId = uuidv4();
+    const bookingId = uuidv4();
+    const expiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const createdHold = await tx.roomHold.create({
+        data: {
+          holdId,
+          roomNo,
+          userId,
+          startDate,
+          endDate,
+          expiresAt,
+          status: 'ACTIVE',
+        },
+      });
+
+      const createdBooking = await tx.booking.create({
+        data: {
+          bookingId,
+          holdId,
+          userId,
+          roomNo,
+          startDate,
+          endDate,
+          status: 'PENDING',
+          totalAmount,
+          notes: notes || null,
+        },
+      });
+
+      if (bookingServicesData.length > 0) {
+        await tx.bookingService.createMany({
+          data: bookingServicesData.map((bs) => ({
+            bookingId,
+            serviceCode: bs.serviceCode,
+            sourceState: bs.sourceState,
+            priceSnapshot: bs.priceSnapshot,
+          })),
+        });
+      }
+
+      return { hold: createdHold, booking: createdBooking };
+    });
+
+    hold = result.hold;
+    booking = result.booking;
+
+    logger.info('Booking created with hold', {
+      bookingId: booking.bookingId,
+      holdId: hold.holdId,
+      roomNo,
+      userId,
+      totalAmount,
+    });
+
+    // 6. Create Stripe PaymentIntent
+    // Stripe amount is in smallest currency unit (cents for USD)
+    const stripeAmount = Math.round(totalAmount * 100);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: stripeAmount,
+      currency: currency.toLowerCase(),
+      metadata: {
+        bookingId: booking.bookingId,
+        holdId: hold.holdId,
+        roomNo,
+        userId,
+      },
+    });
+
+    // 7. Persist the Payment record
+    const payment = await prisma.payment.create({
+      data: {
+        stripePaymentIntentId: paymentIntent.id,
+        amount: totalAmount,
+        currency: currency.toLowerCase(),
+        status: 'PENDING',
+        bookingId: booking.bookingId,
+      },
+    });
+
+    logger.info('PaymentIntent created', {
+      paymentId: payment.id,
+      stripeId: paymentIntent.id,
+      bookingId: booking.bookingId,
+    });
+
+    res.status(201).json({
+      bookingId: booking.bookingId,
+      holdId: hold.holdId,
+      paymentId: payment.id,
+      clientSecret: paymentIntent.client_secret,
+      totalAmount,
+      currency,
+      nights,
+      services: bookingServicesData,
+    });
+  } catch (err) {
+    // Rollback: if booking was created but Stripe failed, cancel everything
+    if (booking) {
+      try {
+        await prisma.$transaction([
+          prisma.bookingService.deleteMany({ where: { bookingId: booking.bookingId } }),
+          prisma.booking.update({
+            where: { bookingId: booking.bookingId },
+            data: { status: 'CANCELLED' },
+          }),
+          prisma.roomHold.update({
+            where: { holdId: hold.holdId },
+            data: { status: 'CANCELLED' },
+          }),
+        ]);
+        logger.warn('Rolled back booking and hold after error', {
+          bookingId: booking.bookingId,
+        });
+      } catch (rollbackErr) {
+        logger.error('Rollback failed', { error: rollbackErr.message });
+      }
+    }
+
+    logger.error('Failed to create payment intent', { error: err.message, stack: err.stack });
+    res.status(500).json({ error: err.message || 'Failed to create payment intent' });
   }
 });
 
-// ── Get booking + payment status ─────────────────────────────────────────────
-router.get("/:bookingId", authenticate, async (req, res) => {
+// ── Get booking + payment status ────────────────────────────────────────────
+
+router.get('/:bookingId', authenticate, async (req, res) => {
   try {
     const { bookingId } = req.params;
 
     const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
+      where: { bookingId },
       include: {
         payment: {
           select: {
@@ -211,41 +303,60 @@ router.get("/:bookingId", authenticate, async (req, res) => {
           },
         },
         room: {
-          select: { id: true, number: true, name: true, pricePerNight: true },
+          select: {
+            roomNo: true,
+            title: true,
+            basePrice: true,
+            hotel: { select: { hotelCode: true, name: true } },
+          },
+        },
+        bookingServices: {
+          include: {
+            service: {
+              select: {
+                serviceCode: true,
+                title: true,
+                priceType: true,
+              },
+            },
+          },
+        },
+        hold: {
+          select: { holdId: true, status: true, expiresAt: true },
         },
       },
     });
 
     if (!booking) {
-      return res.status(404).json({ error: "Booking not found" });
+      return res.status(404).json({ error: 'Booking not found' });
     }
 
-    // Only the owner can see their booking
     if (booking.userId !== req.user.id) {
-      return res.status(403).json({ error: "Forbidden" });
+      return res.status(403).json({ error: 'Forbidden' });
     }
 
     res.json({ booking });
   } catch (err) {
-    logger.error("Failed to get booking", { error: err.message });
-    res.status(500).json({ error: "Failed to get booking" });
+    logger.error('Failed to get booking', { error: err.message });
+    res.status(500).json({ error: 'Failed to get booking' });
   }
 });
 
-// ── Cancel a pending booking ─────────────────────────────────────────────────
-router.post("/cancel/:bookingId", authenticate, async (req, res) => {
+// ── Cancel a pending booking ────────────────────────────────────────────────
+
+router.post('/cancel/:bookingId', authenticate, async (req, res) => {
   try {
     const { bookingId } = req.params;
     const stripe = getStripe();
 
     const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { payment: true },
+      where: { bookingId },
+      include: { payment: true, hold: true },
     });
 
-    if (!booking) return res.status(404).json({ error: "Booking not found" });
-    if (booking.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
-    if (booking.status !== "PENDING") {
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.userId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    if (booking.status !== 'PENDING') {
       return res.status(409).json({ error: `Cannot cancel a booking with status ${booking.status}` });
     }
 
@@ -253,42 +364,49 @@ router.post("/cancel/:bookingId", authenticate, async (req, res) => {
     if (booking.payment) {
       try {
         await stripe.paymentIntents.cancel(booking.payment.stripePaymentIntentId);
-        logger.info("Stripe PaymentIntent cancelled", {
+        logger.info('Stripe PaymentIntent cancelled', {
           stripeId: booking.payment.stripePaymentIntentId,
         });
       } catch (stripeErr) {
-        // If already cancelled, that's fine
-        if (stripeErr.code !== "payment_intent_unexpected_state") {
-          logger.warn("Could not cancel Stripe PaymentIntent", { error: stripeErr.message });
+        if (stripeErr.code !== 'payment_intent_unexpected_state') {
+          logger.warn('Could not cancel Stripe PaymentIntent', { error: stripeErr.message });
         }
       }
     }
 
-    // Cancel booking + release room lock atomically
-    await prisma.$transaction([
+    // Cancel booking + hold + payment atomically
+    const txOps = [
       prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: "CANCELLED" },
+        where: { bookingId },
+        data: { status: 'CANCELLED' },
       }),
-      ...(booking.payment
-        ? [
-            prisma.payment.update({
-              where: { id: booking.payment.id },
-              data: { status: "CANCELLED" },
-            }),
-          ]
-        : []),
-      prisma.hotelRoom.update({
-        where: { id: booking.roomId },
-        data: { locked: false, lockedAt: null },
-      }),
-    ]);
+    ];
 
-    logger.info("Booking cancelled", { bookingId, userId: req.user.id });
-    res.json({ message: "Booking cancelled successfully" });
+    if (booking.hold) {
+      txOps.push(
+        prisma.roomHold.update({
+          where: { holdId: booking.holdId },
+          data: { status: 'CANCELLED' },
+        })
+      );
+    }
+
+    if (booking.payment) {
+      txOps.push(
+        prisma.payment.update({
+          where: { id: booking.payment.id },
+          data: { status: 'CANCELLED' },
+        })
+      );
+    }
+
+    await prisma.$transaction(txOps);
+
+    logger.info('Booking cancelled', { bookingId, userId: req.user.id });
+    res.json({ message: 'Booking cancelled successfully' });
   } catch (err) {
-    logger.error("Failed to cancel booking", { error: err.message });
-    res.status(500).json({ error: "Failed to cancel booking" });
+    logger.error('Failed to cancel booking', { error: err.message });
+    res.status(500).json({ error: 'Failed to cancel booking' });
   }
 });
 
