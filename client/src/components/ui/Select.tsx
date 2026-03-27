@@ -1,5 +1,6 @@
 import React, { memo, forwardRef } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { INPUT_CLASS, INPUT_ERROR_CLASS, FIELD_LABEL_CLASS } from '@/utils/formStyles';
 
 export interface SelectOption {
   value: string | number;
@@ -15,11 +16,10 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
   placeholder?: string;
 }
 
-const BASE =
-  'w-full appearance-none bg-white border rounded-md text-text text-sm pl-3 pr-9 py-2.5 ' +
-  'transition-colors duration-150 cursor-pointer ' +
-  'focus:outline-none ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed';
+// Select needs appearance-none + extra right padding for the chevron icon,
+// so we compose on top of the shared INPUT_CLASS constant.
+const SELECT_BASE = INPUT_CLASS + ' appearance-none pr-9';
+const SELECT_ERROR = INPUT_ERROR_CLASS + ' appearance-none pr-9';
 
 const Select = memo(
   forwardRef<HTMLSelectElement, SelectProps>(function Select(
@@ -27,14 +27,12 @@ const Select = memo(
     ref,
   ) {
     const selectId = id ?? (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
-    const border   = error
-      ? 'border-red-400 focus:border-red-500 focus:ring-[3px] focus:ring-red-400/20'
-      : 'border-gray-200 focus:border-primary focus:ring-[3px] focus:ring-primary/20';
+    const base = error ? SELECT_ERROR : SELECT_BASE;
 
     return (
       <div className="flex flex-col gap-1 w-full">
         {label && (
-          <label htmlFor={selectId} className="text-sm font-medium text-text/80">
+          <label htmlFor={selectId} className={FIELD_LABEL_CLASS}>
             {label}
           </label>
         )}
@@ -43,7 +41,7 @@ const Select = memo(
           <select
             ref={ref}
             id={selectId}
-            className={[BASE, border, className ?? ''].join(' ')}
+            className={[base, 'cursor-pointer', className ?? ''].join(' ')}
             aria-invalid={!!error}
             {...rest}
           >

@@ -1,4 +1,5 @@
 import React, { memo, forwardRef } from 'react';
+import { INPUT_CLASS, INPUT_ERROR_CLASS, FIELD_LABEL_CLASS } from '@/utils/formStyles';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -12,16 +13,6 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   rightAddon?: React.ReactNode;
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
-const BASE_INPUT =
-  'w-full bg-white border rounded-md text-text placeholder-text/40 text-sm ' +
-  'transition-colors duration-150 focus:outline-none ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed';
-
-const NORMAL_BORDER = 'border-gray-200 focus:border-primary focus:ring-[3px] focus:ring-primary/20';
-const ERROR_BORDER  = 'border-red-400 focus:border-red-500 focus:ring-[3px] focus:ring-red-400/20';
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const Input = memo(
@@ -33,12 +24,15 @@ const Input = memo(
 
     const paddingLeft  = leftAddon  ? 'pl-10' : 'pl-3';
     const paddingRight = rightAddon ? 'pr-10' : 'pr-3';
-    const borderClass  = error ? ERROR_BORDER : NORMAL_BORDER;
+
+    // Base style comes from the shared constant; override px only when addons
+    // are present (left/right padding is already px-3 in INPUT_CLASS).
+    const baseWithoutPx = (error ? INPUT_ERROR_CLASS : INPUT_CLASS).replace('px-3 ', '');
 
     return (
       <div className="flex flex-col gap-1 w-full">
         {label && (
-          <label htmlFor={inputId} className="text-sm font-medium text-text/80">
+          <label htmlFor={inputId} className={FIELD_LABEL_CLASS}>
             {label}
           </label>
         )}
@@ -53,7 +47,12 @@ const Input = memo(
           <input
             ref={ref}
             id={inputId}
-            className={[BASE_INPUT, borderClass, paddingLeft, paddingRight, 'py-2.5', className ?? ''].join(' ')}
+            className={[
+              baseWithoutPx,
+              paddingLeft,
+              paddingRight,
+              className ?? '',
+            ].join(' ')}
             aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
             {...rest}

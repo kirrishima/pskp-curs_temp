@@ -10,6 +10,7 @@ import {
   ArrowUpNarrowWide,
   ArrowDownWideNarrow,
 } from 'lucide-react';
+import { INPUT_CLASS, FILTER_LABEL_CLASS, CHECKBOX_CLASS } from '@/utils/formStyles';
 import useAppSelector from '@/hooks/useAppSelector';
 import { searchRooms, getServices, deleteRoom } from '@/api/hotelApi';
 import type { RoomSearchResult } from '@/api/hotelApi';
@@ -135,10 +136,9 @@ function buildUrlParams(
 
 const PAGE_SIZE = 30; // 10 rows × 3 cards per row
 
-const inputClass =
-  'w-full px-3 py-2 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-shadow text-sm text-text disabled:bg-gray-100 disabled:text-gray-400';
-
-const labelClass = 'block text-xs font-bold text-text/50 uppercase tracking-wider mb-1';
+// Aliases for brevity inside JSX — values come from the shared formStyles module.
+const inputClass = INPUT_CLASS;
+const labelClass = FILTER_LABEL_CLASS;
 
 const SORT_OPTIONS = [
   { value: 'basePrice', label: 'Цена' },
@@ -397,7 +397,7 @@ const FilterPanel = memo(function FilterPanel({
                       type="checkbox"
                       checked={(filters.services || []).includes(svc.serviceCode)}
                       onChange={() => handleServiceToggle(svc.serviceCode)}
-                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/50"
+                      className={CHECKBOX_CLASS}
                     />
                     <span className="text-sm text-text">{svc.title}</span>
                   </label>

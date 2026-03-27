@@ -1,4 +1,5 @@
 import React, { memo, forwardRef } from 'react';
+import { INPUT_CLASS, INPUT_ERROR_CLASS, FIELD_LABEL_CLASS } from '@/utils/formStyles';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
@@ -6,26 +7,22 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
   hint?: string;
 }
 
-const BASE =
-  'w-full bg-white border rounded-md text-text placeholder-text/40 text-sm px-3 py-2.5 ' +
-  'transition-colors duration-150 resize-y min-h-[80px] ' +
-  'focus:outline-none ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed';
+// Textarea keeps the same visual style as <input> but with resize and min-height.
+const TEXTAREA_BASE = INPUT_CLASS + ' resize-y min-h-[80px]';
+const TEXTAREA_ERROR = INPUT_ERROR_CLASS + ' resize-y min-h-[80px]';
 
 const Textarea = memo(
   forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
     { label, error, hint, className, id, ...rest },
     ref,
   ) {
-    const areaId   = id ?? (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
-    const border   = error
-      ? 'border-red-400 focus:border-red-500 focus:ring-[3px] focus:ring-red-400/20'
-      : 'border-gray-200 focus:border-primary focus:ring-[3px] focus:ring-primary/20';
+    const areaId = id ?? (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+    const base   = error ? TEXTAREA_ERROR : TEXTAREA_BASE;
 
     return (
       <div className="flex flex-col gap-1 w-full">
         {label && (
-          <label htmlFor={areaId} className="text-sm font-medium text-text/80">
+          <label htmlFor={areaId} className={FIELD_LABEL_CLASS}>
             {label}
           </label>
         )}
@@ -33,7 +30,7 @@ const Textarea = memo(
         <textarea
           ref={ref}
           id={areaId}
-          className={[BASE, border, className ?? ''].join(' ')}
+          className={[base, className ?? ''].join(' ')}
           aria-invalid={!!error}
           {...rest}
         />
