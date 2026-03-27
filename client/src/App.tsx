@@ -10,6 +10,7 @@ import api from '@/api/axiosInstance';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ProfilePage from '@/pages/ProfilePage';
+import HomePage from '@/pages/HomePage';
 import RoomSearchPage from '@/pages/RoomSearchPage';
 import RoomDetailsPage from '@/pages/RoomDetailsPage';
 import RoomEditorPage from '@/pages/RoomEditorPage';
@@ -33,7 +34,7 @@ const AdminRoute = memo(function AdminRoute({ children }: { children: React.Reac
 
 const GuestRoute = memo(function GuestRoute({ children }: { children: React.ReactElement }) {
   const user = useAppSelector((s) => s.auth.user);
-  if (user) return <Navigate to="/rooms" replace />;
+  if (user) return <Navigate to="/" replace />;
   return children;
 });
 
@@ -148,8 +149,8 @@ function AppContent() {
     <div className="min-h-screen bg-background flex flex-col font-sans">
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 h-16 flex items-center justify-between px-8 shadow-sm">
         <div className="flex items-center gap-6">
-          <Link to="/" className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity">
-            Hotel App
+          <Link to="/" className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity tracking-wide">
+            Moonglow
           </Link>
           <nav className="hidden sm:flex items-center gap-4">
             <Link to="/rooms" className="text-sm text-text/60 hover:text-text transition-colors">
@@ -172,8 +173,8 @@ function AppContent() {
 
       <main className="flex-grow">
         <Routes>
-          {/* Root → catalog */}
-          <Route path="/" element={<Navigate to="/rooms" replace />} />
+          {/* Home page */}
+          <Route path="/" element={<HomePage />} />
 
           {/* Public */}
           <Route path="/rooms" element={<RoomSearchPage />} />
@@ -197,7 +198,7 @@ function AppContent() {
       </main>
 
       <footer className="bg-white py-8 text-center text-text/50 text-sm border-t border-gray-100">
-        <p>&copy; {new Date().getFullYear()} Hotel App. Все права защищены.</p>
+        <p>&copy; {new Date().getFullYear()} Moonglow Hotel. Все права защищены.</p>
       </footer>
     </div>
   );

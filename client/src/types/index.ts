@@ -36,10 +36,16 @@ export interface Hotel {
   hotelCode: string;
   name: string;
   description?: string | null;
+  tagline?: string | null;
+  aboutText?: string | null;
+  heroImageUrl?: string | null;
   city?: string | null;
   address?: string | null;
   phone?: string | null;
   email?: string | null;
+  stars?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
   createdAt?: string;
   rooms?: RoomSummary[];
 }

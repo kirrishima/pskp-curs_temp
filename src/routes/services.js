@@ -24,7 +24,7 @@ const VALID_PRICE_TYPES = new Set(['PER_NIGHT', 'ONE_TIME']);
 
 // ── List all services ───────────────────────────────────────────────────────
 
-router.get('/', authenticate, async (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
     const services = await prisma.service.findMany({
       where: { isActive: true },
@@ -40,7 +40,7 @@ router.get('/', authenticate, async (_req, res) => {
 
 // ── Get single service ──────────────────────────────────────────────────────
 
-router.get('/:serviceCode', authenticate, async (req, res) => {
+router.get('/:serviceCode', async (req, res) => {
   try {
     const { serviceCode } = req.params;
 

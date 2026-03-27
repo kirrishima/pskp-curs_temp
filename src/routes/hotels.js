@@ -19,6 +19,43 @@ const { authorize } = require('../middleware/authorize');
 const logger = createLogger('Hotels');
 const router = Router();
 
+// ── Public hotel info (no auth) ─────────────────────────────────────────────
+
+router.get('/public/:hotelCode', async (req, res) => {
+  try {
+    const { hotelCode } = req.params;
+
+    const hotel = await prisma.hotel.findUnique({
+      where: { hotelCode },
+      select: {
+        hotelCode: true,
+        name: true,
+        description: true,
+        tagline: true,
+        aboutText: true,
+        heroImageUrl: true,
+        city: true,
+        address: true,
+        phone: true,
+        email: true,
+        stars: true,
+        latitude: true,
+        longitude: true,
+        _count: { select: { rooms: true } },
+      },
+    });
+
+    if (!hotel) {
+      return res.status(404).json({ error: 'Hotel not found' });
+    }
+
+    res.json({ hotel });
+  } catch (err) {
+    logger.error('Failed to get public hotel info', { error: err.message });
+    res.status(500).json({ error: 'Failed to get hotel info' });
+  }
+});
+
 // ── List all hotels ─────────────────────────────────────────────────────────
 
 router.get('/', authenticate, async (req, res) => {

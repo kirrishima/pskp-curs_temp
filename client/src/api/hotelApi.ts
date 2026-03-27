@@ -13,6 +13,11 @@ export async function getHotel(hotelCode: string): Promise<{ hotel: Hotel }> {
   return data;
 }
 
+export async function getHotelPublic(hotelCode: string): Promise<{ hotel: Hotel & { _count?: { rooms: number } } }> {
+  const { data } = await api.get(`/hotels/public/${hotelCode}`);
+  return data;
+}
+
 export async function createHotel(payload: Partial<Hotel>): Promise<{ hotel: Hotel }> {
   const { data } = await api.post('/hotels', payload);
   return data;

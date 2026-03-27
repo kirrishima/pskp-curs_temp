@@ -129,14 +129,20 @@ model QRCode {
 // ── Hotels ──────────────────────────────────────────────────────────────────
 
 model Hotel {
-  hotelCode   String   @id @map("hotel_code")
-  name        String
-  description String?
-  city        String?
-  address     String?
-  phone       String?
-  email       String?
-  createdAt   DateTime @default(now())
+  hotelCode    String   @id @map("hotel_code")
+  name         String
+  description  String?
+  tagline      String?
+  aboutText    String?  @map("about_text")
+  heroImageUrl String?  @map("hero_image_url")
+  city         String?
+  address      String?
+  phone        String?
+  email        String?
+  stars        Int?
+  latitude     Decimal? @db.Decimal(10, 7)
+  longitude    Decimal? @db.Decimal(10, 7)
+  createdAt    DateTime @default(now())
 
   rooms Room[]
 

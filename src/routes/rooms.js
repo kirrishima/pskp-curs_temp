@@ -25,7 +25,7 @@ const { Router } = require('express');
 const { Prisma } = require('@prisma/client');
 const { createLogger } = require('../logger');
 const prisma = require('../services/prisma');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const { authorize, resolveRole } = require('../middleware/authorize');
 
 const logger = createLogger('Rooms');
@@ -54,7 +54,7 @@ function parseDecimalParam(value) {
 
 // ── Search available rooms (GET /api/rooms/search) ──────────────────────────
 
-router.get('/search', authenticate, resolveRole, async (req, res) => {
+router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
   try {
     const {
       checkIn,
@@ -364,7 +364,7 @@ router.get('/search', authenticate, resolveRole, async (req, res) => {
 
 // ── Get single room ─────────────────────────────────────────────────────────
 
-router.get('/:roomNo', authenticate, async (req, res) => {
+router.get('/:roomNo', async (req, res) => {
   try {
     const { roomNo } = req.params;
 
