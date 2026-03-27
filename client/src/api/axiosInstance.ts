@@ -17,7 +17,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // ─── Base URL ────────────────────────────────────────────────────────────────
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'https://192.168.1.6:3001/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'https://localhost:3001/api';
 
 // ─── Instance ────────────────────────────────────────────────────────────────
 
