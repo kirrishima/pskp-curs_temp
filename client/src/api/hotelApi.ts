@@ -1,6 +1,42 @@
 import api from './axiosInstance';
 import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo } from '@/types';
 
+// ── Module-level promise cache ───────────────────────────────────────────────
+// Caches the promise itself (not just the resolved value) so that concurrent
+// callers — including React 18 StrictMode's intentional double-mount — share
+// a single in-flight request and receive the same result without extra round
+// trips to the server.  Entries expire after CACHE_TTL_MS milliseconds so
+// data stays reasonably fresh across navigation within a session.
+
+interface CacheEntry<T> {
+  promise: Promise<T>;
+  expiresAt: number;
+}
+
+const _cache = new Map<string, CacheEntry<unknown>>();
+const CACHE_TTL_MS = 5; /* * 60 * 1000 */ // 3 secs
+
+function withCache<T>(key: string, fetcher: () => Promise<T>, ttl = CACHE_TTL_MS): Promise<T> {
+  const now = Date.now();
+  const entry = _cache.get(key);
+  if (entry && entry.expiresAt > now) {
+    return entry.promise as Promise<T>;
+  }
+  const promise = fetcher().catch((err: unknown) => {
+    // Remove failed entry so the next caller retries instead of reusing a
+    // rejected promise indefinitely.
+    _cache.delete(key);
+    throw err;
+  });
+  _cache.set(key, { promise, expiresAt: now + ttl });
+  return promise;
+}
+
+/** Manually invalidate a cached entry (e.g. after a mutation). */
+export function invalidateCache(key: string): void {
+  _cache.delete(key);
+}
+
 // ── Hotels ──────────────────────────────────────────────────────────────────
 
 export async function getHotels(): Promise<{ hotels: Hotel[] }> {
@@ -13,9 +49,12 @@ export async function getHotel(hotelCode: string): Promise<{ hotel: Hotel }> {
   return data;
 }
 
-export async function getHotelPublic(hotelCode: string): Promise<{ hotel: Hotel & { _count?: { rooms: number } } }> {
-  const { data } = await api.get(`/hotels/public/${hotelCode}`);
-  return data;
+export function getHotelPublic(
+  hotelCode: string,
+): Promise<{ hotel: Hotel & { _count?: { rooms: number } } }> {
+  return withCache(`hotel:public:${hotelCode}`, () =>
+    api.get(`/hotels/public/${hotelCode}`).then((r) => r.data),
+  );
 }
 
 export async function createHotel(payload: Partial<Hotel>): Promise<{ hotel: Hotel }> {
@@ -73,9 +112,10 @@ export async function searchRooms(params: RoomSearchParams): Promise<RoomSearchR
   return data;
 }
 
-export async function getRoom(roomNo: string): Promise<{ room: Room }> {
-  const { data } = await api.get(`/rooms/${roomNo}`);
-  return data;
+export function getRoom(roomNo: string): Promise<{ room: Room }> {
+  return withCache(`room:${roomNo}`, () =>
+    api.get(`/rooms/${roomNo}`).then((r) => r.data),
+  );
 }
 
 export async function createRoom(payload: Partial<Room>): Promise<{ room: Room }> {
@@ -117,9 +157,8 @@ export async function deleteRoomImage(roomNo: string, imageId: number): Promise<
 
 // ── Services ────────────────────────────────────────────────────────────────
 
-export async function getServices(): Promise<{ services: Service[] }> {
-  const { data } = await api.get('/services');
-  return data;
+export function getServices(): Promise<{ services: Service[] }> {
+  return withCache('services:all', () => api.get('/services').then((r) => r.data));
 }
 
 export async function getService(serviceCode: string): Promise<{ service: Service }> {
