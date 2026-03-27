@@ -21,10 +21,10 @@ async function main() {
   console.log('\nSeeding demo hotel...');
 
   const hotel = await prisma.hotel.upsert({
-    where: { hotelCode: 'MOONGLOW-01' },
+    where: { hotelCode: 'MOONGLOW' },
     update: {},
     create: {
-      hotelCode: 'MOONGLOW-01',
+      hotelCode: 'MOONGLOW',
       name: 'Moonglow Hotel',
       description: 'A luxurious hotel in the heart of the city',
       city: 'Moscow',
@@ -64,11 +64,11 @@ async function main() {
   console.log('\nSeeding rooms...');
 
   const roomsData = [
-    { roomNo: 'MG-101', hotelCode: 'MOONGLOW-01', title: 'Standard Single',   capacity: 1, bedsCount: 1, floor: 1, area: 20,  basePrice: 80 },
-    { roomNo: 'MG-102', hotelCode: 'MOONGLOW-01', title: 'Standard Double',   capacity: 2, bedsCount: 1, floor: 1, area: 25,  basePrice: 120 },
-    { roomNo: 'MG-201', hotelCode: 'MOONGLOW-01', title: 'Deluxe Double',     capacity: 2, bedsCount: 2, floor: 2, area: 35,  basePrice: 180 },
-    { roomNo: 'MG-202', hotelCode: 'MOONGLOW-01', title: 'Family Suite',      capacity: 4, bedsCount: 3, floor: 2, area: 55,  basePrice: 300 },
-    { roomNo: 'MG-301', hotelCode: 'MOONGLOW-01', title: 'Presidential Suite', capacity: 2, bedsCount: 1, floor: 3, area: 80,  basePrice: 500 },
+    { roomNo: 'MG-101', hotelCode: 'MOONGLOW', title: 'Standard Single',   capacity: 1, bedsCount: 1, floor: 1, area: 20,  basePrice: 80 },
+    { roomNo: 'MG-102', hotelCode: 'MOONGLOW', title: 'Standard Double',   capacity: 2, bedsCount: 1, floor: 1, area: 25,  basePrice: 120 },
+    { roomNo: 'MG-201', hotelCode: 'MOONGLOW', title: 'Deluxe Double',     capacity: 2, bedsCount: 2, floor: 2, area: 35,  basePrice: 180 },
+    { roomNo: 'MG-202', hotelCode: 'MOONGLOW', title: 'Family Suite',      capacity: 4, bedsCount: 3, floor: 2, area: 55,  basePrice: 300 },
+    { roomNo: 'MG-301', hotelCode: 'MOONGLOW', title: 'Presidential Suite', capacity: 2, bedsCount: 1, floor: 3, area: 80,  basePrice: 500 },
   ];
 
   for (const r of roomsData) {
