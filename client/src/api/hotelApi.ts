@@ -14,7 +14,7 @@ interface CacheEntry<T> {
 }
 
 const _cache = new Map<string, CacheEntry<unknown>>();
-const CACHE_TTL_MS = 5; /* * 60 * 1000 */ // 3 secs
+const CACHE_TTL_MS = 5000; /* * 60 * 1000 */ // 3 secs
 
 function withCache<T>(key: string, fetcher: () => Promise<T>, ttl = CACHE_TTL_MS): Promise<T> {
   const now = Date.now();
