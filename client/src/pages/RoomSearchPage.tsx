@@ -10,7 +10,8 @@ import {
   ArrowUpNarrowWide,
   ArrowDownWideNarrow,
 } from 'lucide-react';
-import { INPUT_CLASS, FILTER_LABEL_CLASS, CHECKBOX_CLASS } from '@/utils/formStyles';
+import { INPUT_CLASS, FILTER_LABEL_CLASS } from '@/utils/formStyles';
+import Checkbox from '@/components/ui/Checkbox';
 import useAppSelector from '@/hooks/useAppSelector';
 import { searchRooms, getServices, deleteRoom } from '@/api/hotelApi';
 import type { RoomSearchResult } from '@/api/hotelApi';
@@ -393,11 +394,9 @@ const FilterPanel = memo(function FilterPanel({
                     key={svc.serviceCode}
                     className="flex items-center gap-2.5 cursor-pointer p-1.5 rounded hover:bg-ui transition-colors"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={(filters.services || []).includes(svc.serviceCode)}
                       onChange={() => handleServiceToggle(svc.serviceCode)}
-                      className={CHECKBOX_CLASS}
                     />
                     <span className="text-sm text-text">{svc.title}</span>
                   </label>

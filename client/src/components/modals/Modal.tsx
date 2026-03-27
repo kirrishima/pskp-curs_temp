@@ -39,11 +39,23 @@ const Modal = memo(function Modal({
   useEffect(() => {
     if (!isOpen) return;
     document.addEventListener('keydown', handleKeyDown);
-    // Prevent background scroll while modal is open
+
+    // Prevent background scroll while the modal is open.
+    // We measure the scrollbar width *before* hiding it and add an equal
+    // amount of right padding to the body so the content width stays
+    // constant and no layout shift occurs when the scrollbar disappears
+    // or reappears.
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
     };
   }, [isOpen, handleKeyDown]);
 

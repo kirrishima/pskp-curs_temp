@@ -27,12 +27,6 @@ export const INPUT_ERROR_CLASS =
   'text-sm text-text placeholder-text/40 ' +
   'disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed';
 
-// ─── Checkboxes ───────────────────────────────────────────────────────────────
-
-export const CHECKBOX_CLASS =
-  'w-4 h-4 rounded border-gray-300 text-primary ' +
-  'focus:ring-2 focus:ring-primary/50 cursor-pointer';
-
 // ─── Labels (two variants) ───────────────────────────────────────────────────
 
 /** Compact uppercase label used in filter panels / search bars. */

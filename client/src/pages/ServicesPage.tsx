@@ -1,5 +1,6 @@
 import React, { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { Edit2, Trash2, Upload } from 'lucide-react';
+import Checkbox from '@/components/ui/Checkbox';
 import useAppSelector from '@/hooks/useAppSelector';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -583,14 +584,13 @@ const ServicesPage = memo(function ServicesPage() {
             disabled={isLoading}
           />
           <div className="flex items-center gap-3 p-3 bg-ui/20 rounded-lg">
-            <input
-              type="checkbox"
+            <Checkbox
               id="isActive"
               checked={formData.isActive !== false}
               onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
               disabled={isLoading}
             />
-            <label htmlFor="isActive" className="text-sm font-medium text-text cursor-pointer">
+            <label htmlFor="isActive" className="text-sm font-medium text-text cursor-pointer select-none">
               Активна
             </label>
           </div>
