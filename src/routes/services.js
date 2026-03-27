@@ -22,6 +22,20 @@ const router = Router();
 // Valid price types
 const VALID_PRICE_TYPES = new Set(['PER_NIGHT', 'ONE_TIME']);
 
+// ── Serialization helper ─────────────────────────────────────────────────────
+// Prisma's Decimal type serializes to a string by default.  Convert it to a
+// plain JS number so clients never receive basePrice as a string.
+
+function serializeService(service) {
+  if (!service) return service;
+  return {
+    ...service,
+    basePrice: service.basePrice !== null && service.basePrice !== undefined
+      ? Number(service.basePrice)
+      : 0,
+  };
+}
+
 // ── List all services ───────────────────────────────────────────────────────
 
 router.get('/', async (_req, res) => {
@@ -31,7 +45,7 @@ router.get('/', async (_req, res) => {
       orderBy: { title: 'asc' },
     });
 
-    res.json({ services });
+    res.json({ services: services.map(serializeService) });
   } catch (err) {
     logger.error('Failed to list services', { error: err.message });
     res.status(500).json({ error: 'Failed to list services' });
@@ -48,7 +62,7 @@ router.get('/all', authenticate, authorize('admin'), async (_req, res) => {
       orderBy: [{ isActive: 'desc' }, { title: 'asc' }],
     });
 
-    res.json({ services });
+    res.json({ services: services.map(serializeService) });
   } catch (err) {
     logger.error('Failed to list all services (admin)', { error: err.message });
     res.status(500).json({ error: 'Failed to list services' });
@@ -69,7 +83,7 @@ router.get('/:serviceCode', async (req, res) => {
       return res.status(404).json({ error: 'Service not found' });
     }
 
-    res.json({ service });
+    res.json({ service: serializeService(service) });
   } catch (err) {
     logger.error('Failed to get service', { error: err.message });
     res.status(500).json({ error: 'Failed to get service' });
@@ -112,7 +126,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     });
 
     logger.info('Service created', { serviceCode: service.serviceCode });
-    res.status(201).json({ service });
+    res.status(201).json({ service: serializeService(service) });
   } catch (err) {
     logger.error('Failed to create service', { error: err.message });
     res.status(500).json({ error: 'Failed to create service' });
@@ -154,7 +168,7 @@ router.patch('/:serviceCode', authenticate, authorize('admin'), async (req, res)
     });
 
     logger.info('Service updated', { serviceCode });
-    res.json({ service });
+    res.json({ service: serializeService(service) });
   } catch (err) {
     logger.error('Failed to update service', { error: err.message });
     res.status(500).json({ error: 'Failed to update service' });

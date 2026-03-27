@@ -232,7 +232,7 @@ router.post(
       });
 
       logger.info('Service icon uploaded', { serviceCode, iconUrl });
-      res.json({ service: updated });
+      res.json({ service: { ...updated, basePrice: Number(updated.basePrice) } });
     } catch (err) {
       logger.error('Failed to upload service icon', { error: err.message });
       res.status(500).json({ error: 'Failed to upload icon' });

@@ -322,9 +322,9 @@ const ServicesPage = memo(function ServicesPage() {
                       <td className="px-6 py-4 text-sm text-text/60 max-w-xs truncate">
                         {service.description || '—'}
                       </td>
-<td className="px-6 py-4 text-sm font-medium text-text">
-  {(console.log(services[0]), service.basePrice.toFixed(2))}
-</td>
+                      <td className="px-6 py-4 text-sm font-medium text-text">
+                        {Number(service.basePrice).toFixed(2)} ₽
+                      </td>
                       <td className="px-6 py-4 text-sm text-text/80">
                         {service.priceType === 'PER_NIGHT' ? 'За ночь' : 'Разовая'}
                       </td>

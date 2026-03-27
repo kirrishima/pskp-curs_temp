@@ -29,6 +29,7 @@ import {
   removeRoomService,
 } from '@/api/hotelApi';
 import { API_BASE_URL } from '@/api/axiosInstance';
+import { ROOM_SERVICE_STATE_OPTIONS } from '@/utils/roomServiceStates';
 import type { Room, Service, RoomServiceEntry, RoomServiceState, ServicePriceType } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
@@ -665,17 +666,14 @@ export default function RoomEditorPage() {
                       <div className="flex-1">
                         <p className="font-semibold text-text">{service.title}</p>
                         <p className="text-xs text-text/50">
-                          ${service.basePrice} {service.priceType === 'PER_NIGHT' ? 'за ночь' : 'разово'}
+                          ${Number(service.basePrice).toFixed(2)}{' '}
+                          {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
                         </p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <Select
-                          options={[
-                            { value: 'INCLUDED', label: 'Включено' },
-                            { value: 'OPTIONAL_ON', label: 'По умолчанию' },
-                            { value: 'OPTIONAL_OFF', label: 'Доступно' },
-                          ]}
+                          options={ROOM_SERVICE_STATE_OPTIONS}
                           value={entry.defaultState}
                           onChange={(e) =>
                             handleUpdateServiceState(entry.serviceCode, e.target.value as RoomServiceState)
@@ -765,12 +763,12 @@ export default function RoomEditorPage() {
           />
 
           <Select
-            label="По умолчанию"
-            options={[
-              { value: 'INCLUDED', label: 'Включено' },
-              { value: 'OPTIONAL_ON', label: 'По умолчанию' },
-              { value: 'OPTIONAL_OFF', label: 'Доступно' },
-            ]}
+            label="Включение по умолчанию"
+            hint={
+              ROOM_SERVICE_STATE_OPTIONS.find((o) => o.value === addServiceModal.defaultState)
+                ?.description
+            }
+            options={ROOM_SERVICE_STATE_OPTIONS}
             value={addServiceModal.defaultState}
             onChange={(e) =>
               setAddServiceModal({
@@ -842,7 +840,7 @@ export default function RoomEditorPage() {
                         <p className="text-xs text-text/50 mt-0.5 truncate">{service.description}</p>
                       )}
                       <p className="text-xs text-text/60 mt-0.5">
-                        ${service.basePrice}{' '}
+                        {Number(service.basePrice).toFixed(2)} ₽{' '}
                         {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
                       </p>
                     </div>

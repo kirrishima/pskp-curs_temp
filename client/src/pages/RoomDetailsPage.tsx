@@ -20,6 +20,7 @@ import Input from '@/components/ui/Input';
 import { API_BASE_URL } from '@/api/axiosInstance';
 
 import { getRoom, deleteRoom } from '@/api/hotelApi';
+import { getRoomServiceStateLabel } from '@/utils/roomServiceStates';
 import type { Room } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
@@ -294,15 +295,13 @@ export default function RoomDetailsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     {room.roomServices.map((entry) => {
                       const service = entry.service;
-                      const stateConfig: Record<string, { label: string; variant: any }> = {
-                        INCLUDED: { label: 'Включено', variant: 'success' },
-                        OPTIONAL_ON: { label: 'По умолчанию', variant: 'info' },
-                        OPTIONAL_OFF: { label: 'Доступно', variant: 'default' },
-                      };
-                      const state = stateConfig[entry.defaultState] || {
-                        label: entry.defaultState,
-                        variant: 'default',
-                      };
+                      // Badge variant per state: INCLUDED = success, OPTIONAL_ON = info, OPTIONAL_OFF = default
+                      const badgeVariant =
+                        entry.defaultState === 'INCLUDED'
+                          ? 'success'
+                          : entry.defaultState === 'OPTIONAL_ON'
+                            ? 'info'
+                            : 'default';
 
                       return (
                         <div
@@ -329,12 +328,12 @@ export default function RoomDetailsPage() {
                           </div>
 
                           <div className="flex items-center justify-between">
-                            <Badge variant={state.variant} className="text-xs">
-                              {state.label}
+                            <Badge variant={badgeVariant} className="text-xs">
+                              {getRoomServiceStateLabel(entry.defaultState)}
                             </Badge>
                             <span className="text-xs text-text/60 font-medium">
-                              ${service.basePrice}{' '}
-                              {service.priceType === 'PER_NIGHT' ? 'за ночь' : 'разово'}
+                              {Number(service.basePrice).toFixed(2)} ₽{' '}
+                              {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
                             </span>
                           </div>
                         </div>
