@@ -1,21 +1,21 @@
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   Calendar,
   Users,
   MapPin,
   SlidersHorizontal,
+  ArrowUpNarrowWide,
+  ArrowDownWideNarrow,
 } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { searchRooms, getServices, deleteRoom } from '@/api/hotelApi';
 import type { RoomSearchResult } from '@/api/hotelApi';
 import RoomCard from '@/components/RoomCard';
 import Button from '@/components/ui/Button';
-import Shimmer, { ShimmerRoomCard, ShimmerFilterPanel } from '@/components/ui/Shimmer';
+import Shimmer, { ShimmerRoomCard } from '@/components/ui/Shimmer';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import AlertModal from '@/components/modals/AlertModal';
 import type { Room, Service } from '@/types';
@@ -27,7 +27,6 @@ interface SearchFilters {
   checkOut: string;
   hotelCode?: string;
   floor?: number;
-  title?: string;
   minPrice?: number;
   maxPrice?: number;
   minBeds?: number;
@@ -39,11 +38,6 @@ interface SearchFilters {
   services?: string[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
-}
-
-interface PaginationState {
-  cursorStack: (string | null)[];
-  currentIndex: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -58,13 +52,93 @@ function getTomorrowDate(): string {
   return d.toISOString().split('T')[0];
 }
 
+/** Parse URLSearchParams → SearchFilters + top-bar state */
+function parseUrlParams(sp: URLSearchParams): {
+  filters: SearchFilters;
+  title: string;
+  guests: number;
+} {
+  const n = (key: string): number | undefined => {
+    const v = sp.get(key);
+    return v !== null && v !== '' ? Number(v) : undefined;
+  };
+  const s = (key: string): string | undefined => sp.get(key) || undefined;
+
+  const checkIn = sp.get('checkIn') || getTodayDate();
+  const checkOut = sp.get('checkOut') || getTomorrowDate();
+  const guests = Number(sp.get('guests') || '1');
+  const servicesRaw = sp.get('services');
+
+  return {
+    filters: {
+      checkIn,
+      checkOut,
+      minCapacity: n('minCapacity') ?? (guests > 0 ? guests : undefined),
+      maxCapacity: n('maxCapacity'),
+      hotelCode: s('hotelCode'),
+      floor: n('floor'),
+      minPrice: n('minPrice'),
+      maxPrice: n('maxPrice'),
+      minBeds: n('minBeds'),
+      maxBeds: n('maxBeds'),
+      minArea: n('minArea'),
+      maxArea: n('maxArea'),
+      services: servicesRaw ? servicesRaw.split(',').filter(Boolean) : undefined,
+      sortBy: s('sortBy'),
+      sortOrder: (s('sortOrder') as 'asc' | 'desc') || undefined,
+    },
+    title: s('title') || '',
+    guests,
+  };
+}
+
+/** Serialize SearchFilters + top-bar state → URLSearchParams */
+function buildUrlParams(
+  filters: SearchFilters,
+  title: string,
+  guests: number,
+): URLSearchParams {
+  const sp = new URLSearchParams();
+  const set = (key: string, value: string | number | undefined | null) => {
+    if (value !== undefined && value !== null && value !== '') {
+      sp.set(key, String(value));
+    }
+  };
+
+  set('checkIn', filters.checkIn);
+  set('checkOut', filters.checkOut);
+  set('guests', guests);
+  if (title) set('title', title);
+  if (filters.hotelCode) set('hotelCode', filters.hotelCode);
+  if (filters.floor) set('floor', filters.floor);
+  if (filters.minPrice) set('minPrice', filters.minPrice);
+  if (filters.maxPrice) set('maxPrice', filters.maxPrice);
+  if (filters.minBeds) set('minBeds', filters.minBeds);
+  if (filters.maxBeds) set('maxBeds', filters.maxBeds);
+  // minCapacity from guests is the default; only write it if it differs from guests
+  if (filters.minCapacity && filters.minCapacity !== guests) {
+    set('minCapacity', filters.minCapacity);
+  }
+  if (filters.maxCapacity) set('maxCapacity', filters.maxCapacity);
+  if (filters.minArea) set('minArea', filters.minArea);
+  if (filters.maxArea) set('maxArea', filters.maxArea);
+  if (filters.services && filters.services.length > 0) {
+    sp.set('services', filters.services.join(','));
+  }
+  if (filters.sortBy) set('sortBy', filters.sortBy);
+  if (filters.sortOrder) set('sortOrder', filters.sortOrder);
+
+  return sp;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 30; // 10 rows × 3 cards per row
 
 const inputClass =
   'w-full px-3 py-2 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-shadow text-sm text-text disabled:bg-gray-100 disabled:text-gray-400';
 
-const labelClass =
-  'block text-xs font-bold text-text/50 uppercase tracking-wider mb-1';
+const labelClass = 'block text-xs font-bold text-text/50 uppercase tracking-wider mb-1';
 
 const SORT_OPTIONS = [
   { value: 'basePrice', label: 'Цена' },
@@ -74,7 +148,7 @@ const SORT_OPTIONS = [
   { value: 'area', label: 'Площадь' },
 ];
 
-// ─── Filter Panel Component ──────────────────────────────────────────────────
+// ─── Filter Panel ─────────────────────────────────────────────────────────────
 
 const FilterPanel = memo(function FilterPanel({
   filters,
@@ -87,7 +161,7 @@ const FilterPanel = memo(function FilterPanel({
   onReset,
 }: {
   filters: SearchFilters;
-  onFiltersChange: (filters: SearchFilters) => void;
+  onFiltersChange: (f: SearchFilters) => void;
   services: Service[];
   servicesLoading: boolean;
   isLoading: boolean;
@@ -96,17 +170,13 @@ const FilterPanel = memo(function FilterPanel({
   onReset: () => void;
 }) {
   const handleChange = useCallback(
-    (key: keyof SearchFilters, value: any) => {
-      onFiltersChange({ ...filters, [key]: value });
-    },
-    [filters, onFiltersChange]
+    (key: keyof SearchFilters, value: any) => onFiltersChange({ ...filters, [key]: value }),
+    [filters, onFiltersChange],
   );
 
-  const handleServiceToggle = (serviceCode: string) => {
-    const currentServices = filters.services || [];
-    const updated = currentServices.includes(serviceCode)
-      ? currentServices.filter((s) => s !== serviceCode)
-      : [...currentServices, serviceCode];
+  const handleServiceToggle = (code: string) => {
+    const cur = filters.services || [];
+    const updated = cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code];
     handleChange('services', updated.length > 0 ? updated : undefined);
   };
 
@@ -131,7 +201,43 @@ const FilterPanel = memo(function FilterPanel({
         </div>
 
         <div className="space-y-5">
-          {/* Price Range */}
+          {/* ── Sort — first ──────────────────────────────────────────── */}
+          <div>
+            <label className={labelClass}>Сортировка</label>
+            <select
+              value={filters.sortBy || 'basePrice'}
+              onChange={(e) => handleChange('sortBy', e.target.value)}
+              className={inputClass}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2 mt-2">
+              {(['asc', 'desc'] as const).map((order) => (
+                <button
+                  key={order}
+                  onClick={() => handleChange('sortOrder', order)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                    (filters.sortOrder || 'asc') === order
+                      ? 'bg-primary text-white'
+                      : 'bg-ui text-text hover:bg-gray-300'
+                  }`}
+                >
+                  {order === 'asc' ? (
+                    <ArrowUpNarrowWide size={14} />
+                  ) : (
+                    <ArrowDownWideNarrow size={14} />
+                  )}
+                  {order === 'asc' ? 'Возрастание' : 'Убывание'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Price ────────────────────────────────────────────────── */}
           <div>
             <label className={labelClass}>Цена за ночь (₽)</label>
             <div className="flex gap-2">
@@ -158,7 +264,7 @@ const FilterPanel = memo(function FilterPanel({
             </div>
           </div>
 
-          {/* Floor */}
+          {/* ── Floor ────────────────────────────────────────────────── */}
           <div>
             <label className={labelClass}>Этаж</label>
             <input
@@ -173,7 +279,7 @@ const FilterPanel = memo(function FilterPanel({
             />
           </div>
 
-          {/* Beds */}
+          {/* ── Beds ─────────────────────────────────────────────────── */}
           <div>
             <label className={labelClass}>Кровати</label>
             <div className="flex gap-2">
@@ -200,7 +306,7 @@ const FilterPanel = memo(function FilterPanel({
             </div>
           </div>
 
-          {/* Capacity */}
+          {/* ── Capacity ─────────────────────────────────────────────── */}
           <div>
             <label className={labelClass}>Вместимость (гостей)</label>
             <div className="flex gap-2">
@@ -227,7 +333,7 @@ const FilterPanel = memo(function FilterPanel({
             </div>
           </div>
 
-          {/* Area */}
+          {/* ── Area ─────────────────────────────────────────────────── */}
           <div>
             <label className={labelClass}>Площадь (м²)</label>
             <div className="flex gap-2">
@@ -254,7 +360,7 @@ const FilterPanel = memo(function FilterPanel({
             </div>
           </div>
 
-          {/* Admin: Hotel Code */}
+          {/* ── Hotel Code (admin) ────────────────────────────────────── */}
           {isAdmin && (
             <div>
               <label className={labelClass}>Код отеля</label>
@@ -268,7 +374,7 @@ const FilterPanel = memo(function FilterPanel({
             </div>
           )}
 
-          {/* Services */}
+          {/* ── Services — auto height, no scroll ────────────────────── */}
           <div>
             <label className={labelClass}>Удобства</label>
             {servicesLoading ? (
@@ -281,19 +387,19 @@ const FilterPanel = memo(function FilterPanel({
                 ))}
               </div>
             ) : services.length > 0 ? (
-              <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto">
-                {services.map((service) => (
+              <div className="space-y-1.5 mt-2">
+                {services.map((svc) => (
                   <label
-                    key={service.serviceCode}
+                    key={svc.serviceCode}
                     className="flex items-center gap-2.5 cursor-pointer p-1.5 rounded hover:bg-ui transition-colors"
                   >
                     <input
                       type="checkbox"
-                      checked={(filters.services || []).includes(service.serviceCode)}
-                      onChange={() => handleServiceToggle(service.serviceCode)}
+                      checked={(filters.services || []).includes(svc.serviceCode)}
+                      onChange={() => handleServiceToggle(svc.serviceCode)}
                       className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/50"
                     />
-                    <span className="text-sm text-text">{service.title}</span>
+                    <span className="text-sm text-text">{svc.title}</span>
                   </label>
                 ))}
               </div>
@@ -302,38 +408,7 @@ const FilterPanel = memo(function FilterPanel({
             )}
           </div>
 
-          {/* Sort Options */}
-          <div>
-            <label className={labelClass}>Сортировка</label>
-            <select
-              value={filters.sortBy || 'basePrice'}
-              onChange={(e) => handleChange('sortBy', e.target.value)}
-              className={inputClass}
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <div className="flex gap-2 mt-2">
-              {(['asc', 'desc'] as const).map((order) => (
-                <button
-                  key={order}
-                  onClick={() => handleChange('sortOrder', order)}
-                  className={`flex-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                    (filters.sortOrder || 'asc') === order
-                      ? 'bg-primary text-white'
-                      : 'bg-ui text-text hover:bg-gray-300'
-                  }`}
-                >
-                  {order === 'asc' ? '↑ Возрастание' : '↓ Убывание'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Apply */}
+          {/* ── Apply ────────────────────────────────────────────────── */}
           <Button
             variant="primary"
             size="md"
@@ -349,44 +424,55 @@ const FilterPanel = memo(function FilterPanel({
   );
 });
 
+// ─── Row skeleton (exactly one row = 3 cards on xl) ──────────────────────────
+
+function RowShimmer() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <ShimmerRoomCard />
+      <ShimmerRoomCard />
+      <ShimmerRoomCard />
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 const RoomSearchPage = memo(function RoomSearchPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAppSelector((s) => s.auth.user);
   const isAdmin = user?.role?.name === 'admin';
 
-  // Parse URL params for initial values
-  const urlCheckIn = searchParams.get('checkIn') || getTodayDate();
-  const urlCheckOut = searchParams.get('checkOut') || getTomorrowDate();
-  const urlGuests = searchParams.get('guests') || '2';
+  // ── Parse initial state from URL ─────────────────────────────────────────
+  const { filters: initialFilters, title: initialTitle, guests: initialGuests } =
+    parseUrlParams(searchParams);
 
-  // Top search bar state
-  const [topCheckIn, setTopCheckIn] = useState(urlCheckIn);
-  const [topCheckOut, setTopCheckOut] = useState(urlCheckOut);
-  const [topGuests, setTopGuests] = useState(Number(urlGuests));
+  // Top search bar
+  const [topCheckIn, setTopCheckIn] = useState(initialFilters.checkIn);
+  const [topCheckOut, setTopCheckOut] = useState(initialFilters.checkOut);
+  const [topGuests, setTopGuests] = useState(initialGuests);
 
-  // Sidebar filter state
-  const [filters, setFilters] = useState<SearchFilters>({
-    checkIn: urlCheckIn,
-    checkOut: urlCheckOut,
-    minCapacity: Number(urlGuests) || undefined,
-  });
+  // Sidebar filters
+  const [filters, setFilters] = useState<SearchFilters>(initialFilters);
+  const [searchTitle, setSearchTitle] = useState(initialTitle);
 
-  const [searchTitle, setSearchTitle] = useState('');
+  // Results
   const [rooms, setRooms] = useState<Room[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
 
-  const [pagination, setPagination] = useState<PaginationState>({
-    cursorStack: [null],
-    currentIndex: 0,
-  });
+  // Infinite scroll cursor
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
+  // Sentinel for IntersectionObserver
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Modals
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; room?: Room }>({
     isOpen: false,
   });
@@ -398,80 +484,58 @@ const RoomSearchPage = memo(function RoomSearchPage() {
   }>({ isOpen: false });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Load services on mount
+  // ── Load services ─────────────────────────────────────────────────────────
+
   useEffect(() => {
-    const loadServices = async () => {
-      try {
-        const { services: loadedServices } = await getServices();
-        setServices(loadedServices.filter((s) => s.isActive));
-      } catch (error) {
-        console.error('Failed to load services:', error);
-      } finally {
-        setServicesLoading(false);
-      }
-    };
-    loadServices();
+    getServices()
+      .then(({ services: s }) => setServices(s.filter((svc) => svc.isActive)))
+      .catch((err) => console.error('Failed to load services:', err))
+      .finally(() => setServicesLoading(false));
   }, []);
 
-  // Auto-search on mount if coming from homepage with params
-  useEffect(() => {
-    if (searchParams.get('checkIn')) {
-      handleSearch();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ── Core search ───────────────────────────────────────────────────────────
 
-  // Sync top search bar → filters
-  const handleTopSearch = useCallback(() => {
-    setFilters((prev) => ({
-      ...prev,
-      checkIn: topCheckIn,
-      checkOut: topCheckOut,
-      minCapacity: topGuests || undefined,
-    }));
-    // We need to trigger the search after state update.
-    // We'll use a flag or just call search directly
-    setPagination({ cursorStack: [null], currentIndex: 0 });
-    setHasSearched(true);
-
-    // Perform search with new params
-    performSearch({
-      ...filters,
-      checkIn: topCheckIn,
-      checkOut: topCheckOut,
-      minCapacity: topGuests || undefined,
-    });
-  }, [topCheckIn, topCheckOut, topGuests, filters]);
-
-  // Core search
   const performSearch = useCallback(
-    async (overrideFilters?: SearchFilters, cursor?: string | null) => {
-      setIsLoading(true);
+    async (
+      overrideFilters?: SearchFilters,
+      overrideTitle?: string,
+      overrideGuests?: number,
+      cursor?: string | null,
+      append = false,
+    ) => {
+      const f = overrideFilters ?? filters;
+      const t = overrideTitle ?? searchTitle;
+      const g = overrideGuests ?? topGuests;
+
+      if (append) setIsLoadingMore(true);
+      else setIsLoading(true);
+
+      // Sync URL with current search state (only on fresh search, not append)
+      if (!append) {
+        setSearchParams(buildUrlParams(f, t, g), { replace: true });
+      }
+
       try {
-        const f = overrideFilters || filters;
-        const searchParams = {
+        const params = {
           ...f,
-          title: searchTitle || undefined,
+          title: t || undefined,
           services: f.services?.join(','),
-          cursor: cursor ?? pagination.cursorStack[pagination.currentIndex] ?? undefined,
+          cursor: cursor ?? undefined,
+          limit: PAGE_SIZE,
         };
+        const result: RoomSearchResult = await searchRooms(params);
 
-        const result: RoomSearchResult = await searchRooms(searchParams);
-        setRooms(result.rooms);
-        setTotalCount(result.rooms.length);
-        setHasSearched(true);
-
-        if (pagination.currentIndex === pagination.cursorStack.length - 1) {
-          setPagination((prev) => ({
-            ...prev,
-            cursorStack: [
-              ...prev.cursorStack,
-              result.pagination.hasNextPage ? result.pagination.nextCursor : null,
-            ],
-          }));
+        if (append) {
+          setRooms((prev) => [...prev, ...result.rooms]);
+        } else {
+          setRooms(result.rooms);
         }
-      } catch (error) {
-        console.error('Search error:', error);
+
+        setHasMore(result.pagination.hasNextPage);
+        setNextCursor(result.pagination.nextCursor);
+        setHasSearched(true);
+      } catch (err) {
+        console.error('Search error:', err);
         setAlertModal({
           isOpen: true,
           title: 'Ошибка',
@@ -480,55 +544,90 @@ const RoomSearchPage = memo(function RoomSearchPage() {
         });
       } finally {
         setIsLoading(false);
+        setIsLoadingMore(false);
       }
     },
-    [filters, searchTitle, pagination]
+    [filters, searchTitle, topGuests, setSearchParams],
   );
 
-  const handleSearch = useCallback(() => {
-    setPagination({ cursorStack: [null], currentIndex: 0 });
-    performSearch(undefined, null);
-  }, [performSearch]);
+  // ── Auto-search on mount ──────────────────────────────────────────────────
 
-  const handleReset = useCallback(() => {
-    setFilters({
+  const initialSearchDone = useRef(false);
+  useEffect(() => {
+    if (!initialSearchDone.current) {
+      initialSearchDone.current = true;
+      performSearch(initialFilters, initialTitle, initialGuests, null, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── IntersectionObserver ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+          performSearch(undefined, undefined, undefined, nextCursor, true);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, isLoadingMore, nextCursor, performSearch]);
+
+  // ── Top bar search ────────────────────────────────────────────────────────
+
+  const handleTopSearch = useCallback(() => {
+    const newFilters: SearchFilters = {
+      ...filters,
       checkIn: topCheckIn,
       checkOut: topCheckOut,
       minCapacity: topGuests || undefined,
-    });
-    setSearchTitle('');
-    setPagination({ cursorStack: [null], currentIndex: 0 });
-    setHasSearched(false);
+    };
+    setFilters(newFilters);
     setRooms([]);
-  }, [topCheckIn, topCheckOut, topGuests]);
+    setNextCursor(null);
+    setHasMore(false);
+    performSearch(newFilters, undefined, topGuests, null, false);
+  }, [topCheckIn, topCheckOut, topGuests, filters, performSearch]);
 
-  // Pagination
-  const handleNextPage = useCallback(() => {
-    if (pagination.currentIndex < pagination.cursorStack.length - 1) {
-      setPagination((prev) => ({ ...prev, currentIndex: prev.currentIndex + 1 }));
-    }
-  }, [pagination]);
+  // ── Sidebar apply ─────────────────────────────────────────────────────────
 
-  const handlePrevPage = useCallback(() => {
-    if (pagination.currentIndex > 0) {
-      setPagination((prev) => ({ ...prev, currentIndex: prev.currentIndex - 1 }));
-    }
-  }, [pagination]);
+  const handleSearch = useCallback(() => {
+    setRooms([]);
+    setNextCursor(null);
+    setHasMore(false);
+    performSearch(undefined, undefined, undefined, null, false);
+  }, [performSearch]);
 
-  useEffect(() => {
-    if (hasSearched && pagination.currentIndex > 0) {
-      performSearch();
-    }
-  }, [pagination.currentIndex]);
+  // ── Reset ─────────────────────────────────────────────────────────────────
 
-  // Room actions
+  const handleReset = useCallback(() => {
+    const resetFilters: SearchFilters = {
+      checkIn: topCheckIn,
+      checkOut: topCheckOut,
+      minCapacity: topGuests || undefined,
+    };
+    setFilters(resetFilters);
+    setSearchTitle('');
+    setRooms([]);
+    setNextCursor(null);
+    setHasMore(false);
+    setHasSearched(false);
+    setSearchParams(buildUrlParams(resetFilters, '', topGuests), { replace: true });
+  }, [topCheckIn, topCheckOut, topGuests, setSearchParams]);
+
+  // ── Room actions ──────────────────────────────────────────────────────────
+
   const handleViewRoom = useCallback(
     (room: Room) => navigate(`/rooms/${room.roomNo}`),
-    [navigate]
+    [navigate],
   );
   const handleEditRoom = useCallback(
     (room: Room) => navigate(`/admin/rooms/${room.roomNo}`),
-    [navigate]
+    [navigate],
   );
   const handleDeleteRoom = useCallback((room: Room) => {
     setDeleteModal({ isOpen: true, room });
@@ -539,16 +638,13 @@ const RoomSearchPage = memo(function RoomSearchPage() {
     setIsDeleting(true);
     try {
       await deleteRoom(deleteModal.room.roomNo);
-      setAlertModal({
-        isOpen: true,
-        title: 'Успешно',
-        message: 'Номер удален.',
-        type: 'success',
-      });
+      setAlertModal({ isOpen: true, title: 'Успешно', message: 'Номер удален.', type: 'success' });
       setDeleteModal({ isOpen: false });
-      handleSearch();
-    } catch (error) {
-      console.error('Delete error:', error);
+      setRooms([]);
+      setNextCursor(null);
+      setHasMore(false);
+      performSearch(undefined, undefined, undefined, null, false);
+    } catch {
       setAlertModal({
         isOpen: true,
         title: 'Ошибка',
@@ -558,15 +654,13 @@ const RoomSearchPage = memo(function RoomSearchPage() {
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteModal, handleSearch]);
+  }, [deleteModal, performSearch]);
 
-  const canGoBack = pagination.currentIndex > 0;
-  const canGoNext =
-    pagination.currentIndex < pagination.cursorStack.length - 1 && rooms.length > 0;
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Top Search Bar ──────────────────────────────────────────────── */}
+      {/* ── Top Search Bar ──────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col md:flex-row gap-3 items-end">
@@ -626,7 +720,7 @@ const RoomSearchPage = memo(function RoomSearchPage() {
               </select>
             </div>
 
-            {/* Search button */}
+            {/* Search */}
             <div>
               <Button
                 variant="primary"
@@ -643,10 +737,10 @@ const RoomSearchPage = memo(function RoomSearchPage() {
         </div>
       </div>
 
-      {/* ── Main Content ────────────────────────────────────────────────── */}
+      {/* ── Main Content ────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Sidebar - Filters */}
+          {/* Sidebar */}
           <div className="lg:col-span-1">
             <FilterPanel
               filters={filters}
@@ -660,9 +754,9 @@ const RoomSearchPage = memo(function RoomSearchPage() {
             />
           </div>
 
-          {/* Right Content - Results */}
+          {/* Results */}
           <div className="lg:col-span-3">
-            {/* Title search bar + Admin button */}
+            {/* Title search + admin button */}
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <div className="flex-1 flex gap-2">
                 <input
@@ -681,7 +775,6 @@ const RoomSearchPage = memo(function RoomSearchPage() {
                   <Search size={18} />
                 </button>
               </div>
-
               {isAdmin && (
                 <Button
                   variant="primary"
@@ -694,9 +787,8 @@ const RoomSearchPage = memo(function RoomSearchPage() {
               )}
             </div>
 
-            {/* Results */}
-            {isLoading && !hasSearched ? (
-              // Initial loading shimmer
+            {/* Results area */}
+            {isLoading && rooms.length === 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <ShimmerRoomCard key={i} />
@@ -707,19 +799,13 @@ const RoomSearchPage = memo(function RoomSearchPage() {
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-xl font-semibold text-text">Результаты поиска</h2>
                   <span className="text-sm text-text/60 bg-white px-3 py-1 rounded-full border border-gray-200">
-                    Показано: <b>{totalCount}</b>
+                    Показано: <b>{rooms.length}</b>
                   </span>
                 </div>
 
-                {isLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <ShimmerRoomCard key={i} />
-                    ))}
-                  </div>
-                ) : rooms.length > 0 ? (
+                {rooms.length > 0 ? (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {rooms.map((room) => (
                         <RoomCard
                           key={room.roomNo}
@@ -732,33 +818,23 @@ const RoomSearchPage = memo(function RoomSearchPage() {
                       ))}
                     </div>
 
-                    {/* Pagination */}
-                    <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        icon={<ChevronLeft size={16} />}
-                        onClick={handlePrevPage}
-                        disabled={!canGoBack}
-                      >
-                        Назад
-                      </Button>
+                    {/* Infinite scroll row skeleton */}
+                    {isLoadingMore && (
+                      <div className="mt-6">
+                        <RowShimmer />
+                      </div>
+                    )}
 
-                      <span className="text-sm text-text/60">
-                        Страница {pagination.currentIndex + 1}
-                      </span>
+                    {/* Sentinel */}
+                    {hasMore && !isLoadingMore && (
+                      <div ref={sentinelRef} className="h-4 mt-4" />
+                    )}
 
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        icon={<ChevronRight size={16} />}
-                        iconPosition="right"
-                        onClick={handleNextPage}
-                        disabled={!canGoNext}
-                      >
-                        Вперед
-                      </Button>
-                    </div>
+                    {!hasMore && rooms.length > 0 && (
+                      <p className="text-center text-text/40 text-sm mt-8 pb-4">
+                        Все номера загружены
+                      </p>
+                    )}
                   </>
                 ) : (
                   <div className="flex items-center justify-center py-16">
@@ -796,12 +872,11 @@ const RoomSearchPage = memo(function RoomSearchPage() {
         onConfirm={confirmDelete}
         title="Удалить номер?"
         message={`Вы уверены, что хотите удалить номер "${deleteModal.room?.title}"? Это действие невозможно отменить.`}
-        isDangerous={true}
+        isDangerous
         isLoading={isDeleting}
         confirmText="Удалить"
         cancelText="Отмена"
       />
-
       <AlertModal
         isOpen={alertModal.isOpen}
         onClose={() => setAlertModal({ isOpen: false })}

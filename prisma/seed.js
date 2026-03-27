@@ -26,11 +26,21 @@ async function main() {
     create: {
       hotelCode: 'MOONGLOW',
       name: 'Moonglow Hotel',
-      description: 'A luxurious hotel in the heart of the city',
-      city: 'Moscow',
-      address: 'Tverskaya St, 1',
-      phone: '+74951234567',
+      description: 'Элегантный бутик-отель в самом сердце Москвы с панорамным видом на город.',
+      tagline: 'Ваш лунный свет в сердце столицы',
+      aboutText:
+        'Moonglow Hotel — это уникальное сочетание современного комфорта и изысканной атмосферы. ' +
+        'Расположенный на Тверской улице, отель предлагает безупречный сервис, стильные номера ' +
+        'и незабываемые впечатления для каждого гостя. Наша команда заботится о том, чтобы ваше ' +
+        'пребывание было идеальным — от момента заселения до выезда.',
+      heroImageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80',
+      city: 'Москва',
+      address: 'ул. Тверская, д. 1',
+      phone: '+7 (495) 123-45-67',
       email: 'info@moonglow.hotel',
+      stars: 4,
+      latitude: 55.7558,
+      longitude: 37.6173,
     },
   });
   console.log(`  Hotel "${hotel.name}" — OK`);

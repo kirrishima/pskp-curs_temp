@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState, useCallback } from 'react';
+import { memo, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -8,15 +8,11 @@ import {
   Phone,
   Mail,
   Star,
-  Wifi,
-  Coffee,
-  Waves,
-  Shield,
-  Clock,
   Heart,
 } from 'lucide-react';
 import { getHotelPublic, getServices } from '@/api/hotelApi';
 import { API_BASE_URL } from '@/api/axiosInstance';
+import { getFeatureIcon } from '@/utils/featureIcons';
 import type { Hotel, Service } from '@/types';
 import Button from '@/components/ui/Button';
 import Shimmer, { ShimmerHotelInfo } from '@/components/ui/Shimmer';
@@ -26,7 +22,10 @@ import Shimmer, { ShimmerHotelInfo } from '@/components/ui/Shimmer';
 const HOTEL_CODE = 'MOONGLOW'; // default hotel code
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-shadow text-sm text-text disabled:bg-gray-100 disabled:text-gray-400';
+  'w-full px-3 py-2 bg-white border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-shadow text-sm text-text disabled:bg-gray-100 disabled:text-gray-400';
+
+const labelClass =
+  'block text-xs font-bold text-text/50 uppercase tracking-wider mb-1';
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -48,17 +47,6 @@ function getImageUrl(imageUrl: string | undefined | null): string {
   return imageUrl;
 }
 
-// ─── Feature highlights icons mapping ────────────────────────────────────────
-
-const featureIcons: Record<string, React.ReactNode> = {
-  wifi: <Wifi size={24} />,
-  coffee: <Coffee size={24} />,
-  pool: <Waves size={24} />,
-  security: <Shield size={24} />,
-  time: <Clock size={24} />,
-  heart: <Heart size={24} />,
-};
-
 // ─── Star Rating ─────────────────────────────────────────────────────────────
 
 const StarRating = memo(function StarRating({ count }: { count: number }) {
@@ -75,14 +63,14 @@ const StarRating = memo(function StarRating({ count }: { count: number }) {
   );
 });
 
-// ─── Search Form ─────────────────────────────────────────────────────────────
+// ─── Search Form (matching /rooms top bar style) ─────────────────────────────
 
 const SearchForm = memo(function SearchForm() {
   const navigate = useNavigate();
 
   const [checkIn, setCheckIn] = useState(getTodayDate());
   const [checkOut, setCheckOut] = useState(getTomorrowDate());
-  const [guests, setGuests] = useState(2);
+  const [guests, setGuests] = useState(1);
 
   const handleSearch = useCallback(() => {
     const params = new URLSearchParams({
@@ -94,75 +82,77 @@ const SearchForm = memo(function SearchForm() {
   }, [navigate, checkIn, checkOut, guests]);
 
   return (
-    <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-4xl mx-auto">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-        {/* Check-in */}
-        <div>
-          <label className="block text-xs font-bold text-text/50 uppercase tracking-wider mb-1.5">
-            <Calendar size={12} className="inline mr-1" />
-            Дата заезда
-          </label>
-          <input
-            type="date"
-            value={checkIn}
-            min={getTodayDate()}
-            onChange={(e) => {
-              setCheckIn(e.target.value);
-              if (e.target.value >= checkOut) {
-                const next = new Date(e.target.value);
-                next.setDate(next.getDate() + 1);
-                setCheckOut(next.toISOString().split('T')[0]);
-              }
-            }}
-            className={inputClass}
-          />
-        </div>
+    <div className="bg-white border-b border-gray-100 shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex flex-col md:flex-row gap-3 items-end">
+          {/* Check-in */}
+          <div className="flex-1 min-w-0">
+            <label className={labelClass}>
+              <Calendar size={12} className="inline mr-1" />
+              Дата заезда
+            </label>
+            <input
+              type="date"
+              value={checkIn}
+              min={getTodayDate()}
+              onChange={(e) => {
+                setCheckIn(e.target.value);
+                if (e.target.value >= checkOut) {
+                  const next = new Date(e.target.value);
+                  next.setDate(next.getDate() + 1);
+                  setCheckOut(next.toISOString().split('T')[0]);
+                }
+              }}
+              className={inputClass}
+            />
+          </div>
 
-        {/* Check-out */}
-        <div>
-          <label className="block text-xs font-bold text-text/50 uppercase tracking-wider mb-1.5">
-            <Calendar size={12} className="inline mr-1" />
-            Дата выезда
-          </label>
-          <input
-            type="date"
-            value={checkOut}
-            min={checkIn}
-            onChange={(e) => setCheckOut(e.target.value)}
-            className={inputClass}
-          />
-        </div>
+          {/* Check-out */}
+          <div className="flex-1 min-w-0">
+            <label className={labelClass}>
+              <Calendar size={12} className="inline mr-1" />
+              Дата выезда
+            </label>
+            <input
+              type="date"
+              value={checkOut}
+              min={checkIn}
+              onChange={(e) => setCheckOut(e.target.value)}
+              className={inputClass}
+            />
+          </div>
 
-        {/* Guests */}
-        <div>
-          <label className="block text-xs font-bold text-text/50 uppercase tracking-wider mb-1.5">
-            <Users size={12} className="inline mr-1" />
-            Гостей
-          </label>
-          <select
-            value={guests}
-            onChange={(e) => setGuests(Number(e.target.value))}
-            className={inputClass}
-          >
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <option key={n} value={n}>
-                {n} {n === 1 ? 'гость' : n < 5 ? 'гостя' : 'гостей'}
-              </option>
-            ))}
-          </select>
-        </div>
+          {/* Guests */}
+          <div className="w-full md:w-36">
+            <label className={labelClass}>
+              <Users size={12} className="inline mr-1" />
+              Гостей
+            </label>
+            <select
+              value={guests}
+              onChange={(e) => setGuests(Number(e.target.value))}
+              className={inputClass}
+            >
+              {[1, 2, 3, 4, 5, 6].map((n) => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? 'гость' : n < 5 ? 'гостя' : 'гостей'}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Search Button */}
-        <div>
-          <Button
-            variant="primary"
-            size="lg"
-            icon={<Search size={18} />}
-            onClick={handleSearch}
-            className="w-full"
-          >
-            Найти номера
-          </Button>
+          {/* Search Button */}
+          <div>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Search size={18} />}
+              onClick={handleSearch}
+              className="whitespace-nowrap"
+            >
+              Найти
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -211,7 +201,7 @@ const HomePage = memo(function HomePage() {
   return (
     <div className="flex flex-col">
       {/* ── Hero Section ─────────────────────────────────────────────────── */}
-      <section className="relative h-[520px] md:h-[600px] w-full bg-gray-900 text-white overflow-hidden">
+      <section className="relative h-[420px] md:h-[500px] w-full bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60 z-10" />
         <img
           src={heroImage}
@@ -244,15 +234,10 @@ const HomePage = memo(function HomePage() {
             </>
           )}
         </div>
-
-        {/* Search Form overlapping hero */}
-        <div className="absolute bottom-0 left-0 right-0 z-30 translate-y-1/2 px-4">
-          <SearchForm />
-        </div>
       </section>
 
-      {/* Spacer for the overlapping search form */}
-      <div className="h-20 md:h-24" />
+      {/* ── Search Form (same style as /rooms top bar) ─────────────────── */}
+      <SearchForm />
 
       {/* ── About Section ────────────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-4 py-16 w-full">
@@ -354,15 +339,12 @@ const HomePage = memo(function HomePage() {
                   className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 text-center hover:shadow-md transition-shadow"
                 >
                   <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                    {service.iconUrl ? (
-                      <img
-                        src={getImageUrl(service.iconUrl)}
-                        alt={service.title}
-                        className="w-5 h-5 object-contain"
-                      />
-                    ) : (
-                      <Coffee size={20} className="text-primary" />
-                    )}
+                    {getFeatureIcon({
+                      iconUrl: service.iconUrl,
+                      icon: service.icon,
+                      size: 20,
+                      className: 'text-primary',
+                    })}
                   </div>
                   <h3 className="font-medium text-text text-sm mb-1">
                     {service.title}
