@@ -15,6 +15,7 @@ const { createLogger } = require('../logger');
 const prisma = require('../services/prisma');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorize');
+const { serializeRoomService } = require('../utils/serializers');
 
 const logger = createLogger('RoomServices');
 const router = Router();
@@ -40,7 +41,7 @@ router.get('/:roomNo', authenticate, async (req, res) => {
       orderBy: { serviceCode: 'asc' },
     });
 
-    res.json({ roomServices });
+    res.json({ roomServices: roomServices.map(serializeRoomService) });
   } catch (err) {
     logger.error('Failed to list room services', { error: err.message });
     res.status(500).json({ error: 'Failed to list room services' });
@@ -81,7 +82,7 @@ router.post('/:roomNo', authenticate, authorize('admin'), async (req, res) => {
     });
 
     logger.info('Service assigned to room', { roomNo, serviceCode, defaultState });
-    res.status(201).json({ roomService });
+    res.status(201).json({ roomService: serializeRoomService(roomService) });
   } catch (err) {
     logger.error('Failed to assign service', { error: err.message });
     res.status(500).json({ error: 'Failed to assign service to room' });
@@ -114,7 +115,7 @@ router.patch('/:roomNo/:serviceCode', authenticate, authorize('admin'), async (r
     });
 
     logger.info('Room-service updated', { roomNo, serviceCode, defaultState });
-    res.json({ roomService });
+    res.json({ roomService: serializeRoomService(roomService) });
   } catch (err) {
     logger.error('Failed to update room-service', { error: err.message });
     res.status(500).json({ error: 'Failed to update room-service' });
@@ -209,7 +210,7 @@ router.put('/:roomNo', authenticate, authorize('admin'), async (req, res) => {
     });
 
     logger.info('Room services bulk-set', { roomNo, count: services.length });
-    res.json({ roomServices });
+    res.json({ roomServices: roomServices.map(serializeRoomService) });
   } catch (err) {
     logger.error('Failed to bulk-set room services', { error: err.message });
     res.status(500).json({ error: 'Failed to set room services' });

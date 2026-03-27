@@ -27,6 +27,7 @@ const { createLogger } = require('../logger');
 const prisma = require('../services/prisma');
 const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const { authorize, resolveRole } = require('../middleware/authorize');
+const { serializeRoom } = require('../utils/serializers');
 
 const logger = createLogger('Rooms');
 const router = Router();
@@ -347,7 +348,7 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
     // ── Response ──────────────────────────────────────────────────────────
 
     res.json({
-      rooms,
+      rooms: rooms.map(serializeRoom),
       pagination: {
         limit: safeLimit,
         hasNextPage,
@@ -387,7 +388,7 @@ router.get('/:roomNo', async (req, res) => {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    res.json({ room });
+    res.json({ room: serializeRoom(room) });
   } catch (err) {
     logger.error('Failed to get room', { error: err.message });
     res.status(500).json({ error: 'Failed to get room' });
@@ -453,7 +454,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     });
 
     logger.info('Room created', { roomNo: room.roomNo, hotelCode });
-    res.status(201).json({ room });
+    res.status(201).json({ room: serializeRoom(room) });
   } catch (err) {
     logger.error('Failed to create room', { error: err.message });
     res.status(500).json({ error: 'Failed to create room' });
@@ -511,7 +512,7 @@ router.patch('/:roomNo', authenticate, authorize('admin'), async (req, res) => {
     });
 
     logger.info('Room updated', { roomNo });
-    res.json({ room });
+    res.json({ room: serializeRoom(room) });
   } catch (err) {
     logger.error('Failed to update room', { error: err.message });
     res.status(500).json({ error: 'Failed to update room' });

@@ -1,0 +1,1 @@
+If you are implementing API endpoints that return data from database tables, ensure that all fields of type Decimal are explicitly serialized to numeric values before sending the response. By default, Prisma serializes Decimal as strings, so you must convert them to numbers to maintain correct data types in the API output.

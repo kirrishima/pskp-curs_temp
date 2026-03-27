@@ -24,6 +24,7 @@ const { getConfig } = require('../config');
 const prisma = require('../services/prisma');
 const { getStripe } = require('../services/stripe');
 const { authenticate } = require('../middleware/auth');
+const { serializeBooking } = require('../utils/serializers');
 
 const logger = createLogger('Payments');
 const router = Router();
@@ -335,7 +336,7 @@ router.get('/:bookingId', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    res.json({ booking });
+    res.json({ booking: serializeBooking(booking) });
   } catch (err) {
     logger.error('Failed to get booking', { error: err.message });
     res.status(500).json({ error: 'Failed to get booking' });

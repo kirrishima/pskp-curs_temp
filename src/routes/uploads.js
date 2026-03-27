@@ -20,6 +20,7 @@ const { createLogger } = require('../logger');
 const prisma = require('../services/prisma');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorize');
+const { serializeService } = require('../utils/serializers');
 
 const logger = createLogger('Uploads');
 const router = Router();
@@ -232,7 +233,7 @@ router.post(
       });
 
       logger.info('Service icon uploaded', { serviceCode, iconUrl });
-      res.json({ service: { ...updated, basePrice: Number(updated.basePrice) } });
+      res.json({ service: serializeService(updated) });
     } catch (err) {
       logger.error('Failed to upload service icon', { error: err.message });
       res.status(500).json({ error: 'Failed to upload icon' });

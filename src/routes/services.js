@@ -15,26 +15,13 @@ const { createLogger } = require('../logger');
 const prisma = require('../services/prisma');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorize');
+const { serializeService } = require('../utils/serializers');
 
 const logger = createLogger('Services');
 const router = Router();
 
 // Valid price types
 const VALID_PRICE_TYPES = new Set(['PER_NIGHT', 'ONE_TIME']);
-
-// ── Serialization helper ─────────────────────────────────────────────────────
-// Prisma's Decimal type serializes to a string by default.  Convert it to a
-// plain JS number so clients never receive basePrice as a string.
-
-function serializeService(service) {
-  if (!service) return service;
-  return {
-    ...service,
-    basePrice: service.basePrice !== null && service.basePrice !== undefined
-      ? Number(service.basePrice)
-      : 0,
-  };
-}
 
 // ── List all services ───────────────────────────────────────────────────────
 

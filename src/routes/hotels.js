@@ -15,6 +15,7 @@ const { createLogger } = require('../logger');
 const prisma = require('../services/prisma');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorize');
+const { serializeHotel } = require('../utils/serializers');
 
 const logger = createLogger('Hotels');
 const router = Router();
@@ -49,7 +50,7 @@ router.get('/public/:hotelCode', async (req, res) => {
       return res.status(404).json({ error: 'Hotel not found' });
     }
 
-    res.json({ hotel });
+    res.json({ hotel: serializeHotel(hotel) });
   } catch (err) {
     logger.error('Failed to get public hotel info', { error: err.message });
     res.status(500).json({ error: 'Failed to get hotel info' });
@@ -64,7 +65,7 @@ router.get('/', authenticate, async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    res.json({ hotels });
+    res.json({ hotels: hotels.map(serializeHotel) });
   } catch (err) {
     logger.error('Failed to list hotels', { error: err.message });
     res.status(500).json({ error: 'Failed to list hotels' });
@@ -99,7 +100,7 @@ router.get('/:hotelCode', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Hotel not found' });
     }
 
-    res.json({ hotel });
+    res.json({ hotel: serializeHotel(hotel) });
   } catch (err) {
     logger.error('Failed to get hotel', { error: err.message });
     res.status(500).json({ error: 'Failed to get hotel' });
@@ -138,7 +139,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     });
 
     logger.info('Hotel created', { hotelCode: hotel.hotelCode });
-    res.status(201).json({ hotel });
+    res.status(201).json({ hotel: serializeHotel(hotel) });
   } catch (err) {
     logger.error('Failed to create hotel', { error: err.message });
     res.status(500).json({ error: 'Failed to create hotel' });
@@ -175,7 +176,7 @@ router.patch('/:hotelCode', authenticate, authorize('admin'), async (req, res) =
     });
 
     logger.info('Hotel updated', { hotelCode });
-    res.json({ hotel });
+    res.json({ hotel: serializeHotel(hotel) });
   } catch (err) {
     logger.error('Failed to update hotel', { error: err.message });
     res.status(500).json({ error: 'Failed to update hotel' });
