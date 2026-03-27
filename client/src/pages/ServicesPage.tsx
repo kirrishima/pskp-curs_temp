@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useCallback } from 'react';
+import React, { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { Edit2, Trash2, Upload } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import Button from '@/components/ui/Button';
@@ -41,6 +41,8 @@ const ServicesPage = memo(function ServicesPage() {
 
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [createIconFile, setCreateIconFile] = useState<File | null>(null);
+  const createIconFileRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<ServiceFormData>({
     serviceCode: '',
     title: '',
@@ -50,11 +52,11 @@ const ServicesPage = memo(function ServicesPage() {
     icon: '',
   });
 
-  // Load services
+  // Load services — admin endpoint returns ALL services, including inactive ones
   const loadServices = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await hotelApi.getServices();
+      const result = await hotelApi.getAllServicesAdmin();
       setServices(result.services);
       setError(null);
     } catch (err) {
@@ -92,8 +94,17 @@ const ServicesPage = memo(function ServicesPage() {
         isActive: true,
       };
 
-      await hotelApi.createService(payload);
+      const created = await hotelApi.createService(payload);
+
+      // Upload icon image if one was selected in the create form
+      if (createIconFile) {
+        await hotelApi.uploadServiceIcon(created.service.serviceCode, createIconFile);
+      }
+
+      hotelApi.invalidateCache('services:all');
       createModal.close();
+      setCreateIconFile(null);
+      if (createIconFileRef.current) createIconFileRef.current.value = '';
       setFormData({
         serviceCode: '',
         title: '',
@@ -135,6 +146,7 @@ const ServicesPage = memo(function ServicesPage() {
       };
 
       await hotelApi.updateService(editModal.payload.serviceCode, payload);
+      hotelApi.invalidateCache('services:all');
       editModal.close();
       setFormData({
         serviceCode: '',
@@ -168,6 +180,7 @@ const ServicesPage = memo(function ServicesPage() {
     try {
       setDeleteLoading(true);
       await hotelApi.deleteService(deleteModal.payload.serviceCode);
+      hotelApi.invalidateCache('services:all');
       deleteModal.close();
       await loadServices();
 
@@ -299,6 +312,7 @@ const ServicesPage = memo(function ServicesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
+
                   {services.map((service) => (
                     <tr key={service.serviceCode} className="hover:bg-ui/20 transition-colors">
                       <td className="px-6 py-4 text-sm font-medium text-text">
@@ -308,9 +322,9 @@ const ServicesPage = memo(function ServicesPage() {
                       <td className="px-6 py-4 text-sm text-text/60 max-w-xs truncate">
                         {service.description || '—'}
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-text">
-                        {service.basePrice.toFixed(2)} ₽
-                      </td>
+<td className="px-6 py-4 text-sm font-medium text-text">
+  {(console.log(services[0]), service.basePrice.toFixed(2))}
+</td>
                       <td className="px-6 py-4 text-sm text-text/80">
                         {service.priceType === 'PER_NIGHT' ? 'За ночь' : 'Разовая'}
                       </td>
@@ -463,8 +477,41 @@ const ServicesPage = memo(function ServicesPage() {
             value={formData.icon}
             onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
             placeholder="например: Coffee"
+            hint="Используется, если не загружено изображение."
             disabled={isLoading}
           />
+
+          {/* Icon image upload — stored as /uploads/services/<serviceCode>.<ext> */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-text/80">
+              Иконка (изображение)
+            </label>
+            <input
+              ref={createIconFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => setCreateIconFile(e.target.files?.[0] ?? null)}
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              onClick={() => createIconFileRef.current?.click()}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-text/70 hover:border-primary/50 hover:text-primary transition text-left"
+            >
+              <Upload size={15} />
+              {createIconFile ? createIconFile.name : 'Выбрать файл…'}
+            </button>
+            <p className="text-xs text-text/50">
+              Сохраняется как{' '}
+              <code className="bg-ui px-1 rounded">
+                services/
+                {formData.serviceCode ? formData.serviceCode : '<КОД>'}
+                .ext
+              </code>
+            </p>
+          </div>
         </div>
       </Modal>
 

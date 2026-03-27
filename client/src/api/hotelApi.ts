@@ -161,6 +161,15 @@ export function getServices(): Promise<{ services: Service[] }> {
   return withCache('services:all', () => api.get('/services').then((r) => r.data));
 }
 
+/**
+ * Admin-only: returns ALL services, including inactive ones.
+ * Results are intentionally not cached so the admin panel always sees live data.
+ */
+export async function getAllServicesAdmin(): Promise<{ services: Service[] }> {
+  const { data } = await api.get('/services/all');
+  return data;
+}
+
 export async function getService(serviceCode: string): Promise<{ service: Service }> {
   const { data } = await api.get(`/services/${serviceCode}`);
   return data;

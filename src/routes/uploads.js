@@ -68,9 +68,31 @@ const roomUpload = createUploadMiddleware(
   (req) => path.join(UPLOAD_ROOT, 'rooms', req.params.roomNo)
 );
 
-const serviceUpload = createUploadMiddleware(
-  (req) => path.join(UPLOAD_ROOT, 'services', req.params.serviceCode)
-);
+// Service icons are stored as flat files named after the serviceCode (primary key)
+// so that uploading a new icon always replaces the old one without creating orphan files.
+// e.g. /uploads/services/WIFI.jpg  or  /uploads/services/SPA.png
+const serviceStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(UPLOAD_ROOT, 'services');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `${req.params.serviceCode}${ext}`);
+  },
+});
+
+const serviceUpload = multer({
+  storage: serviceStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_TYPES.has(file.mimetype)) {
+      return cb(new Error('Only JPEG, PNG, WebP and GIF images are allowed'));
+    }
+    cb(null, true);
+  },
+});
 
 // ── Upload room images ──────────────────────────────────────────────────────
 
@@ -193,7 +215,7 @@ router.post(
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      const iconUrl = `/uploads/services/${serviceCode}/${req.file.filename}`;
+      const iconUrl = `/uploads/services/${req.file.filename}`;
 
       // Delete old icon file if exists
       if (service.iconUrl) {

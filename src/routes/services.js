@@ -38,6 +38,23 @@ router.get('/', async (_req, res) => {
   }
 });
 
+// ── List ALL services including inactive (admin only) ───────────────────────
+// Must be registered before /:serviceCode so that /all doesn't get captured
+// by the generic param route.
+
+router.get('/all', authenticate, authorize('admin'), async (_req, res) => {
+  try {
+    const services = await prisma.service.findMany({
+      orderBy: [{ isActive: 'desc' }, { title: 'asc' }],
+    });
+
+    res.json({ services });
+  } catch (err) {
+    logger.error('Failed to list all services (admin)', { error: err.message });
+    res.status(500).json({ error: 'Failed to list services' });
+  }
+});
+
 // ── Get single service ──────────────────────────────────────────────────────
 
 router.get('/:serviceCode', async (req, res) => {

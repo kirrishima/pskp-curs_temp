@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, Trash2, Plus, X } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Plus, X, ToggleLeft, ToggleRight } from 'lucide-react';
 
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -18,13 +18,18 @@ import {
   uploadRoomImages,
   deleteRoomImage,
   getServices,
+  getAllServicesAdmin,
+  createService,
+  updateService,
+  uploadServiceIcon,
+  invalidateCache,
   getRoomServices,
   addRoomService,
   updateRoomService,
   removeRoomService,
 } from '@/api/hotelApi';
 import { API_BASE_URL } from '@/api/axiosInstance';
-import type { Room, Service, RoomServiceEntry, RoomServiceState } from '@/types';
+import type { Room, Service, RoomServiceEntry, RoomServiceState, ServicePriceType } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
 
@@ -60,6 +65,26 @@ interface AddServiceModalState {
 interface ManageServicesModalState {
   isOpen: boolean;
 }
+
+interface CreateServiceForm {
+  serviceCode: string;
+  title: string;
+  description: string;
+  basePrice: string;
+  priceType: ServicePriceType;
+  icon: string;
+  iconFile: File | null;
+}
+
+const BLANK_CREATE_FORM: CreateServiceForm = {
+  serviceCode: '',
+  title: '',
+  description: '',
+  basePrice: '0',
+  priceType: 'PER_NIGHT',
+  icon: '',
+  iconFile: null,
+};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -118,6 +143,17 @@ export default function RoomEditorPage() {
     isOpen: false,
     message: '',
   });
+
+  // Manage-services modal — shows ALL services (active + inactive) for admin
+  const [manageServicesAll, setManageServicesAll] = useState<Service[]>([]);
+  const [manageServicesLoading, setManageServicesLoading] = useState(false);
+
+  // Create-service modal (stacks on top of manage-services)
+  const [createSvcModalOpen, setCreateSvcModalOpen] = useState(false);
+  const [createSvcForm, setCreateSvcForm] = useState<CreateServiceForm>(BLANK_CREATE_FORM);
+  const [createSvcSaving, setCreateSvcSaving] = useState(false);
+  const [createSvcError, setCreateSvcError] = useState<string | null>(null);
+  const iconFileRef = useRef<HTMLInputElement>(null);
 
   // Load data
   useEffect(() => {
@@ -299,6 +335,106 @@ export default function RoomEditorPage() {
     },
     [formData.roomNo],
   );
+
+  // Open manage-services modal and load all services (incl. inactive)
+  const handleOpenManageServices = useCallback(async () => {
+    setManageServicesModal({ isOpen: true });
+    setManageServicesLoading(true);
+    try {
+      const res = await getAllServicesAdmin();
+      setManageServicesAll(res.services);
+    } catch (err) {
+      console.error('Failed to load all services:', err);
+    } finally {
+      setManageServicesLoading(false);
+    }
+  }, []);
+
+  // Toggle isActive on a service from inside the manage modal
+  const handleToggleServiceActive = useCallback(
+    async (serviceCode: string, currentActive: boolean) => {
+      try {
+        await updateService(serviceCode, { isActive: !currentActive });
+        setManageServicesAll((prev) =>
+          prev.map((s) =>
+            s.serviceCode === serviceCode ? { ...s, isActive: !currentActive } : s,
+          ),
+        );
+        // Keep allServices (used by the "add service" dropdown) in sync
+        if (!currentActive) {
+          // Reactivated — add back to the available list
+          setManageServicesAll((prev) => {
+            const reactivated = prev.find((s) => s.serviceCode === serviceCode);
+            if (reactivated) {
+              setAllServices((as) => [...as, { ...reactivated, isActive: true }]);
+            }
+            return prev;
+          });
+        } else {
+          // Deactivated — remove from available list
+          setAllServices((as) => as.filter((s) => s.serviceCode !== serviceCode));
+        }
+        invalidateCache('services:all');
+      } catch (err) {
+        console.error('Failed to toggle service active:', err);
+        setErrorAlert({ isOpen: true, message: 'Ошибка при изменении статуса услуги' });
+      }
+    },
+    [],
+  );
+
+  // Create a new service (and optionally upload its icon)
+  const handleCreateService = useCallback(async () => {
+    const { serviceCode, title, description, basePrice, priceType, icon, iconFile } = createSvcForm;
+
+    if (!serviceCode.trim()) {
+      setCreateSvcError('Код услуги обязателен');
+      return;
+    }
+    if (!title.trim()) {
+      setCreateSvcError('Название обязательно');
+      return;
+    }
+
+    setCreateSvcSaving(true);
+    setCreateSvcError(null);
+
+    try {
+      const created = await createService({
+        serviceCode: serviceCode.trim().toUpperCase(),
+        title: title.trim(),
+        description: description.trim() || undefined,
+        basePrice: parseFloat(basePrice) || 0,
+        priceType,
+        icon: icon.trim() || undefined,
+      });
+
+      // Upload icon file if one was selected
+      if (iconFile) {
+        await uploadServiceIcon(created.service.serviceCode, iconFile);
+      }
+
+      // Invalidate public cache and refresh both lists
+      invalidateCache('services:all');
+      const refreshed = await getAllServicesAdmin();
+      setManageServicesAll(refreshed.services);
+      setAllServices(refreshed.services.filter((s) => s.isActive));
+
+      // Close create modal and reset form
+      setCreateSvcModalOpen(false);
+      setCreateSvcForm(BLANK_CREATE_FORM);
+      if (iconFileRef.current) iconFileRef.current.value = '';
+
+      setSuccessAlert({ isOpen: true, message: 'Услуга успешно создана' });
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error ||
+        (err instanceof Error ? err.message : 'Ошибка при создании услуги');
+      setCreateSvcError(msg);
+    } finally {
+      setCreateSvcSaving(false);
+    }
+  }, [createSvcForm]);
 
   if (loading) {
     return (
@@ -511,7 +647,7 @@ export default function RoomEditorPage() {
                 variant="tertiary"
                 size="sm"
                 icon={<Plus size={16} />}
-                onClick={() => setManageServicesModal({ isOpen: true })}
+                onClick={handleOpenManageServices}
               >
                 Управлять услугами
               </Button>
@@ -552,7 +688,7 @@ export default function RoomEditorPage() {
                           size="sm"
                           icon={<X size={16} />}
                           onClick={() => handleRemoveService(entry.serviceCode)}
-                        />
+                        >{''}</Button>
                       </div>
                     </div>
                   );
@@ -646,11 +782,12 @@ export default function RoomEditorPage() {
         </div>
       </Modal>
 
-      {/* Manage services modal */}
+      {/* Manage services modal — shows ALL services including inactive */}
       <Modal
         isOpen={manageServicesModal.isOpen}
         onClose={() => setManageServicesModal({ isOpen: false })}
         title="Управление услугами"
+        maxWidthClass="max-w-2xl"
         footer={
           <Button
             variant="primary"
@@ -660,32 +797,232 @@ export default function RoomEditorPage() {
           </Button>
         }
       >
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {allServices.length > 0 ? (
-            allServices.map((service) => (
-              <div
-                key={service.serviceCode}
-                className="p-3 border border-ui rounded-lg hover:bg-ui/30 transition"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="font-semibold text-text">{service.title}</p>
-                    {service.description && (
-                      <p className="text-xs text-text/50 mt-1">{service.description}</p>
-                    )}
-                    <p className="text-xs text-text/60 mt-1">
-                      ${service.basePrice} {service.priceType === 'PER_NIGHT' ? 'за ночь' : 'разово'}
-                    </p>
-                  </div>
-                  <Badge variant={service.isActive ? 'success' : 'danger'}>
-                    {service.isActive ? 'Активна' : 'Неактивна'}
-                  </Badge>
-                </div>
-              </div>
-            ))
-          ) : (
+        <div>
+          {/* Create new service button */}
+          <div className="mb-4">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus size={16} />}
+              onClick={() => {
+                setCreateSvcForm(BLANK_CREATE_FORM);
+                setCreateSvcError(null);
+                setCreateSvcModalOpen(true);
+              }}
+            >
+              Создать новую услугу
+            </Button>
+          </div>
+
+          {/* Services list */}
+          {manageServicesLoading ? (
+            <div className="text-center py-8 text-text/50">Загрузка...</div>
+          ) : manageServicesAll.length === 0 ? (
             <div className="text-center py-8 text-text/50">Услуги не найдены</div>
+          ) : (
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {manageServicesAll.map((service) => (
+                <div
+                  key={service.serviceCode}
+                  className={`p-3 border rounded-lg transition ${
+                    service.isActive
+                      ? 'border-ui hover:bg-ui/30'
+                      : 'border-gray-200 bg-gray-50 opacity-70'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-text truncate">{service.title}</p>
+                        <span className="text-xs font-mono text-text/40 shrink-0">
+                          {service.serviceCode}
+                        </span>
+                      </div>
+                      {service.description && (
+                        <p className="text-xs text-text/50 mt-0.5 truncate">{service.description}</p>
+                      )}
+                      <p className="text-xs text-text/60 mt-0.5">
+                        ${service.basePrice}{' '}
+                        {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={service.isActive ? 'success' : 'warning'}>
+                        {service.isActive ? 'Активна' : 'Неактивна'}
+                      </Badge>
+                      <button
+                        title={service.isActive ? 'Деактивировать' : 'Активировать'}
+                        onClick={() =>
+                          handleToggleServiceActive(service.serviceCode, service.isActive)
+                        }
+                        className="p-1 rounded text-text/40 hover:text-primary transition"
+                      >
+                        {service.isActive ? (
+                          <ToggleRight size={22} className="text-green-500" />
+                        ) : (
+                          <ToggleLeft size={22} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Create service modal — stacks on top of manage-services modal */}
+      <Modal
+        isOpen={createSvcModalOpen}
+        onClose={() => {
+          setCreateSvcModalOpen(false);
+          setCreateSvcError(null);
+          if (iconFileRef.current) iconFileRef.current.value = '';
+        }}
+        title="Создать услугу"
+        maxWidthClass="max-w-lg"
+        footer={
+          <>
+            <Button
+              variant="tertiary"
+              onClick={() => {
+                setCreateSvcModalOpen(false);
+                setCreateSvcError(null);
+                if (iconFileRef.current) iconFileRef.current.value = '';
+              }}
+              disabled={createSvcSaving}
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateService}
+              isLoading={createSvcSaving}
+            >
+              Создать
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {createSvcError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {createSvcError}
+            </div>
+          )}
+
+          <Input
+            label="Код услуги"
+            value={createSvcForm.serviceCode}
+            onChange={(e) =>
+              setCreateSvcForm({ ...createSvcForm, serviceCode: e.target.value })
+            }
+            placeholder="Например: BREAKFAST"
+            hint="Уникальный идентификатор. Будет преобразован в верхний регистр."
+            disabled={createSvcSaving}
+          />
+
+          <Input
+            label="Название"
+            value={createSvcForm.title}
+            onChange={(e) =>
+              setCreateSvcForm({ ...createSvcForm, title: e.target.value })
+            }
+            placeholder="Например: Завтрак включён"
+            disabled={createSvcSaving}
+          />
+
+          <Textarea
+            label="Описание"
+            value={createSvcForm.description}
+            onChange={(e) =>
+              setCreateSvcForm({ ...createSvcForm, description: e.target.value })
+            }
+            placeholder="Краткое описание услуги (необязательно)"
+            disabled={createSvcSaving}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Базовая цена (₽)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={createSvcForm.basePrice}
+              onChange={(e) =>
+                setCreateSvcForm({ ...createSvcForm, basePrice: e.target.value })
+              }
+              disabled={createSvcSaving}
+            />
+
+            <Select
+              label="Тип цены"
+              value={createSvcForm.priceType}
+              onChange={(e) =>
+                setCreateSvcForm({
+                  ...createSvcForm,
+                  priceType: e.target.value as ServicePriceType,
+                })
+              }
+              options={[
+                { value: 'PER_NIGHT', label: 'За ночь' },
+                { value: 'ONE_TIME', label: 'Разовая' },
+              ]}
+              disabled={createSvcSaving}
+            />
+          </div>
+
+          <Input
+            label="Иконка (имя Lucide React)"
+            value={createSvcForm.icon}
+            onChange={(e) =>
+              setCreateSvcForm({ ...createSvcForm, icon: e.target.value })
+            }
+            placeholder="Например: Coffee, Wifi, Car"
+            hint="Используется если не загружено изображение иконки."
+            disabled={createSvcSaving}
+          />
+
+          {/* Icon file upload */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-text/80">
+              Иконка (изображение)
+            </label>
+            <input
+              ref={iconFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setCreateSvcForm({ ...createSvcForm, iconFile: file });
+              }}
+              disabled={createSvcSaving}
+            />
+            <button
+              type="button"
+              onClick={() => iconFileRef.current?.click()}
+              disabled={createSvcSaving}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-text/70 hover:border-primary/50 hover:text-primary transition text-left"
+            >
+              <Upload size={15} />
+              {createSvcForm.iconFile
+                ? createSvcForm.iconFile.name
+                : 'Выбрать файл…'}
+            </button>
+            <p className="text-xs text-text/50">
+              Файл будет сохранён как{' '}
+              <code className="bg-ui px-1 rounded">
+                services/
+                {createSvcForm.serviceCode
+                  ? createSvcForm.serviceCode.toUpperCase()
+                  : '<КОД>'}
+                .ext
+              </code>
+            </p>
+          </div>
         </div>
       </Modal>
 
