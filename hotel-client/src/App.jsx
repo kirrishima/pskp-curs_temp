@@ -242,11 +242,7 @@ function StripeCheckoutForm({ amount, currency, onSuccess, onClose }) {
           {error}
         </div>
       )}
-
-      <div style={{ padding: 10, borderRadius: 6, background: "#1e3a2f", border: "1px solid #166534", fontSize: 12, color: "#86efac" }}>
-        🧪 Тестовая карта: <strong>4242 4242 4242 4242</strong> · любой срок · любой CVC
-      </div>
-
+  
       <div style={{ display: "flex", gap: 10 }}>
         <button type="button" onClick={onClose}
           style={{ ...s.btn, flex: 1, background: "#1e293b", border: "1px solid #334155" }}>
@@ -254,7 +250,7 @@ function StripeCheckoutForm({ amount, currency, onSuccess, onClose }) {
         </button>
         <button type="submit" disabled={!stripe || loading}
           style={{ ...s.btn, flex: 2, background: loading ? "#334155" : "#22c55e", fontWeight: 700 }}>
-          {loading ? "Обработка..." : `Оплатить $${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`}
+          {loading ? "Обработка..." : `Оплатить ${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`}
         </button>
       </div>
     </form>

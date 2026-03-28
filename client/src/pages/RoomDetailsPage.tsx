@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  Wifi,
   Users,
   DoorOpen,
   Maximize2,
@@ -21,6 +20,8 @@ import { API_BASE_URL } from '@/api/axiosInstance';
 
 import { getRoom, deleteRoom, checkRoomAvailability } from '@/api/hotelApi';
 import { getRoomServiceStateLabel } from '@/utils/roomServiceStates';
+import { getFeatureIcon } from '@/utils/featureIcons';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import type { Room } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
@@ -276,7 +277,7 @@ export default function RoomDetailsPage() {
               <div className="mb-6 pb-6 border-b border-ui">
                 <div className="flex items-baseline gap-2">
                   <span className="text-sm text-text/50 uppercase tracking-wider">Цена за ночь</span>
-                  <span className="text-3xl font-bold text-primary">${room.basePrice}</span>
+                  <span className="text-3xl font-bold text-primary">{room.basePrice} {CURRENCY_SYMBOL}</span>
                 </div>
               </div>
 
@@ -345,16 +346,9 @@ export default function RoomDetailsPage() {
                           className="p-3 border border-ui rounded-lg hover:bg-ui/50 transition"
                         >
                           <div className="flex items-start gap-2 mb-2">
-                            {service.iconUrl && (
-                              <img
-                                src={resolveImageUrl(service.iconUrl)}
-                                alt={service.title}
-                                className="w-5 h-5 object-contain flex-shrink-0 mt-0.5"
-                              />
-                            )}
-                            {service.icon && !service.iconUrl && (
-                              <Wifi size={16} className="text-primary flex-shrink-0 mt-0.5" />
-                            )}
+                            <span className="flex-shrink-0 mt-0.5">
+                              {getFeatureIcon({ iconUrl: service.iconUrl, icon: service.icon, size: 16 })}
+                            </span>
                             <div className="flex-1">
                               <p className="font-semibold text-text text-sm">{service.title}</p>
                               {service.description && (
@@ -368,7 +362,7 @@ export default function RoomDetailsPage() {
                               {getRoomServiceStateLabel(entry.defaultState)}
                             </Badge>
                             <span className="text-xs text-text/60 font-medium">
-                              {Number(service.basePrice).toFixed(2)} ₽{' '}
+                              {Number(service.basePrice).toFixed(2)} {CURRENCY_SYMBOL}{' '}
                               {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
                             </span>
                           </div>

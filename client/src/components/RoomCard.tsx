@@ -3,6 +3,7 @@ import { Users, Square, Edit2, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { API_BASE_URL } from '@/api/axiosInstance';
 import { getFeatureIcon } from '@/utils/featureIcons';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import type { Room } from '@/types';
 
 // ─── Service badge color assignment ──────────────────────────────────────────
@@ -200,7 +201,7 @@ const RoomCard = memo(function RoomCard({
         <div className="mt-auto">
           <div className="border-t border-gray-100 pt-3 mb-4">
             <p className="text-lg font-bold text-primary">
-              {room.basePrice.toLocaleString('ru-RU')} ₽
+              {room.basePrice.toLocaleString('ru-RU')} {CURRENCY_SYMBOL}
               <span className="text-sm font-normal text-text/60">/ночь</span>
             </p>
           </div>

@@ -11,6 +11,7 @@ import AlertModal from '@/components/modals/AlertModal';
 import { useModal } from '@/hooks/useModal';
 import { API_BASE_URL } from '@/api/axiosInstance';
 import * as hotelApi from '@/api/hotelApi';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import type { Service, ServicePriceType } from '@/types';
 
 // ─── Create/Edit Form State ───────────────────────────────────────────────
@@ -324,7 +325,7 @@ const ServicesPage = memo(function ServicesPage() {
                         {service.description || '—'}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-text">
-                        {Number(service.basePrice).toFixed(2)} ₽
+                        {Number(service.basePrice).toFixed(2)} {CURRENCY_SYMBOL}
                       </td>
                       <td className="px-6 py-4 text-sm text-text/80">
                         {service.priceType === 'PER_NIGHT' ? 'За ночь' : 'Разовая'}

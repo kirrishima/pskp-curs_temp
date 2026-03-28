@@ -49,6 +49,8 @@ import { useWebSocket, type WsMessage } from '@/hooks/useWebSocket';
 import { createPaymentIntent, cancelBooking } from '@/api/hotelApi';
 import { API_BASE_URL } from '@/api/axiosInstance';
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FIELD_LABEL_CLASS } from '@/utils/formStyles';
+import { getFeatureIcon } from '@/utils/featureIcons';
+import { CURRENCY_SYMBOL, CURRENCY_CODE } from '@/utils/currency';
 import type { Room, RoomServiceEntry } from '@/types';
 
 // ─── Stripe promise ───────────────────────────────────────────────────────────
@@ -224,7 +226,7 @@ const PriceBreakdown = memo(function PriceBreakdown({
         <span className="text-text/70">
           Номер × {nightsLabel(nights)}
         </span>
-        <span className="font-medium text-text">{fmt(room.basePrice * nights)} ₽</span>
+        <span className="font-medium text-text">{fmt(room.basePrice * nights)} {CURRENCY_SYMBOL}</span>
       </div>
       {activeServices.map((rs) => {
         const price = rs.service.basePrice ?? 0;
@@ -237,13 +239,13 @@ const PriceBreakdown = memo(function PriceBreakdown({
                 <span className="text-text/40 text-xs"> × {nights} н.</span>
               )}
             </span>
-            <span className="font-medium text-text">{fmt(lineTotal)} ₽</span>
+            <span className="font-medium text-text">{fmt(lineTotal)} {CURRENCY_SYMBOL}</span>
           </div>
         );
       })}
       <div className="border-t border-gray-200 pt-2 flex items-center justify-between">
         <span className="font-semibold text-text">Итого</span>
-        <span className={`font-bold text-primary ${compact ? 'text-base' : 'text-lg'}`}>{fmt(total)} ₽</span>
+        <span className={`font-bold text-primary ${compact ? 'text-base' : 'text-lg'}`}>{fmt(total)} {CURRENCY_SYMBOL}</span>
       </div>
     </div>
   );
@@ -283,7 +285,9 @@ function Step0Services({ room, roomServices, selections, nights, onToggle, onNex
                   className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
                 >
                   <div className="flex items-center gap-2">
-                    <Check size={14} className="text-green-500 flex-shrink-0" />
+                    <span className="flex-shrink-0">
+                      {getFeatureIcon({ iconUrl: rs.service.iconUrl, icon: rs.service.icon, size: 16, className: 'text-green-600' })}
+                    </span>
                     <div>
                       <span className="text-sm font-medium text-text">{rs.service.title}</span>
                       {rs.service.description && (
@@ -292,7 +296,7 @@ function Step0Services({ room, roomServices, selections, nights, onToggle, onNex
                     </div>
                   </div>
                   <span className="text-xs text-green-600 font-medium whitespace-nowrap ml-3">
-                    {fmt(lineTotal)} ₽
+                    {fmt(lineTotal)} {CURRENCY_SYMBOL}
                   </span>
                 </div>
               );
@@ -331,6 +335,9 @@ function Step0Services({ room, roomServices, selections, nights, onToggle, onNex
                     >
                       {isOn && <Check size={11} className="text-white" strokeWidth={3} />}
                     </div>
+                    <span className="flex-shrink-0">
+                      {getFeatureIcon({ iconUrl: rs.service.iconUrl, icon: rs.service.icon, size: 16, className: isOn ? 'text-primary' : 'text-text/40' })}
+                    </span>
                     <div>
                       <span className="text-sm font-medium text-text">{rs.service.title}</span>
                       {rs.service.description && (
@@ -340,10 +347,10 @@ function Step0Services({ room, roomServices, selections, nights, onToggle, onNex
                   </div>
                   <div className="text-right ml-3 flex-shrink-0">
                     <div className={`text-sm font-semibold ${isOn ? 'text-primary' : 'text-text/50'}`}>
-                      + {fmt(lineTotal)} ₽
+                      + {fmt(lineTotal)} {CURRENCY_SYMBOL}
                     </div>
                     {rs.service.priceType === 'PER_NIGHT' && (
-                      <div className="text-xs text-text/40">{fmt(price)} ₽ / ночь</div>
+                      <div className="text-xs text-text/40">{fmt(price)} {CURRENCY_SYMBOL} / ночь</div>
                     )}
                   </div>
                 </button>
@@ -539,11 +546,6 @@ function StripeCheckoutForm({ totalAmount, currency, bookingId, onSuccess, onCan
         </div>
       )}
 
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-        🧪 Тестовая карта:{' '}
-        <strong className="font-mono">4242 4242 4242 4242</strong> · любой срок · любой CVC
-      </div>
-
       <div className="flex gap-3">
         <button
           type="button"
@@ -614,7 +616,7 @@ function Step2Confirmation({
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [serverTotal, setServerTotal] = useState<number>(0);
-  const [currency, setCurrency] = useState<string>('usd');
+  const [currency, setCurrency] = useState<string>(CURRENCY_CODE);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [timeLeft, setTimeLeft] = useState<string>('');
@@ -676,7 +678,7 @@ function Step2Confirmation({
         checkOut,
         selectedServices: selections,
         notes: guestData.notes || undefined,
-        currency: 'usd',
+        currency: CURRENCY_CODE,
       });
 
       setClientSecret(result.clientSecret);
@@ -831,10 +833,12 @@ function Step2Confirmation({
                 return (
                   <div key={rs.serviceCode} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <Check size={13} className="text-green-500 flex-shrink-0" />
+                      <span className="flex-shrink-0">
+                        {getFeatureIcon({ iconUrl: rs.service.iconUrl, icon: rs.service.icon, size: 14, className: 'text-primary' })}
+                      </span>
                       <span className="text-text/80">{rs.service.title}</span>
                     </div>
-                    <span className="text-text/60 text-xs">{fmt(lineTotal)} ₽</span>
+                    <span className="text-text/60 text-xs">{fmt(lineTotal)} {CURRENCY_SYMBOL}</span>
                   </div>
                 );
               })}

@@ -30,6 +30,7 @@ import {
 } from '@/api/hotelApi';
 import { API_BASE_URL } from '@/api/axiosInstance';
 import { ROOM_SERVICE_STATE_OPTIONS } from '@/utils/roomServiceStates';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import type { Room, Service, RoomServiceEntry, RoomServiceState, ServicePriceType } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
@@ -840,7 +841,7 @@ export default function RoomEditorPage() {
                         <p className="text-xs text-text/50 mt-0.5 truncate">{service.description}</p>
                       )}
                       <p className="text-xs text-text/60 mt-0.5">
-                        {Number(service.basePrice).toFixed(2)} ₽{' '}
+                        {Number(service.basePrice).toFixed(2)} {CURRENCY_SYMBOL}{' '}
                         {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
                       </p>
                     </div>
@@ -944,7 +945,7 @@ export default function RoomEditorPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Базовая цена (₽)"
+              label={`Базовая цена (${CURRENCY_SYMBOL})`}
               type="number"
               min="0"
               step="0.01"

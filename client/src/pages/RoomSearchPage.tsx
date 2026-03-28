@@ -11,6 +11,7 @@ import {
   ArrowDownWideNarrow,
 } from 'lucide-react';
 import { INPUT_CLASS, FILTER_LABEL_CLASS } from '@/utils/formStyles';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import Checkbox from '@/components/ui/Checkbox';
 import useAppSelector from '@/hooks/useAppSelector';
 import { searchRooms, getServices, deleteRoom } from '@/api/hotelApi';
@@ -240,7 +241,7 @@ const FilterPanel = memo(function FilterPanel({
 
           {/* ── Price ────────────────────────────────────────────────── */}
           <div>
-            <label className={labelClass}>Цена за ночь (₽)</label>
+            <label className={labelClass}>Цена за ночь ({CURRENCY_SYMBOL})</label>
             <div className="flex gap-2">
               <input
                 type="number"
