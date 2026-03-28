@@ -690,7 +690,9 @@ function Step2Confirmation({
       setBookingId(result.bookingId);
       setServerTotal(result.totalAmount);
       setCurrency(result.currency);
-      const expiry = new Date(Date.now() + 30 * 60 * 1000);
+      const expiry = result.expiresAt
+        ? new Date(result.expiresAt)
+        : new Date(Date.now() + 5 * 60 * 1000);
       startTimer(expiry);
       setPhase('ready');
     } catch (err) {

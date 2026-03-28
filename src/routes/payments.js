@@ -29,7 +29,7 @@ const { serializeBooking } = require('../utils/serializers');
 const logger = createLogger('Payments');
 const router = Router();
 
-const HOLD_DURATION_MINUTES = 30;
+const HOLD_DURATION_MINUTES = 5;
 
 // ── Client config (publishable key) — must be before /:bookingId ────────────
 
@@ -86,9 +86,73 @@ router.post('/create-intent', authenticate, async (req, res) => {
         startDate: { lt: endDate },
         endDate: { gt: startDate },
       },
+      include: {
+        payment: true,
+        hold: { select: { holdId: true, expiresAt: true } },
+      },
     });
+
     if (overlap) {
-      return res.status(409).json({ error: 'Room is already booked for the selected dates' });
+      // Recovery path: user's own PENDING booking from a failed previous attempt
+      // (e.g. Stripe.js was blocked by an ad blocker on the client side)
+      const isOwnPending =
+        overlap.userId === userId &&
+        overlap.status === 'PENDING' &&
+        overlap.payment?.status === 'PENDING' &&
+        overlap.hold?.expiresAt > new Date();
+
+      if (isOwnPending) {
+        const pi = await stripe.paymentIntents.retrieve(overlap.payment.stripePaymentIntentId);
+        const recoverableStatuses = [
+          'requires_payment_method',
+          'requires_confirmation',
+          'requires_action',
+        ];
+
+        if (recoverableStatuses.includes(pi.status)) {
+          const resumeNights = Math.ceil(
+            (overlap.endDate.getTime() - overlap.startDate.getTime()) / (24 * 60 * 60 * 1000),
+          );
+          logger.info('Resuming existing PENDING booking for user', {
+            bookingId: overlap.bookingId,
+            userId,
+          });
+          return res.status(200).json({
+            bookingId: overlap.bookingId,
+            holdId: overlap.holdId,
+            paymentId: overlap.payment.id,
+            clientSecret: pi.client_secret,
+            totalAmount: Number(overlap.totalAmount),
+            currency: overlap.payment.currency,
+            nights: resumeNights,
+            expiresAt: overlap.hold.expiresAt,
+            resumed: true,
+          });
+        }
+
+        // PaymentIntent is in a terminal state — cancel the stale records and allow re-creation
+        logger.info('Cancelling stale booking with terminal PI, allowing re-creation', {
+          bookingId: overlap.bookingId,
+          piStatus: pi.status,
+        });
+        await prisma.$transaction([
+          prisma.booking.update({
+            where: { bookingId: overlap.bookingId },
+            data: { status: 'CANCELLED' },
+          }),
+          prisma.roomHold.update({
+            where: { holdId: overlap.holdId },
+            data: { status: 'CANCELLED' },
+          }),
+          prisma.payment.update({
+            where: { id: overlap.payment.id },
+            data: { status: 'CANCELLED' },
+          }),
+        ]);
+        // Fall through to create a new booking
+      } else {
+        return res.status(409).json({ error: 'Room is already booked for the selected dates' });
+      }
     }
 
     // Also check active holds from other users
@@ -258,6 +322,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
       totalAmount,
       currency,
       nights,
+      expiresAt: hold.expiresAt,
       services: bookingServicesData,
     });
   } catch (err) {
