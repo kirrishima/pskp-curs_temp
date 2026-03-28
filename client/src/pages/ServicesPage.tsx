@@ -645,6 +645,16 @@ const ServicesPage = memo(function ServicesPage() {
               };
               input.click();
             }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const file = e.dataTransfer.files?.[0];
+              if (file) handleUploadIcon(file);
+            }}
           >
             <input
               type="file"

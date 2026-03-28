@@ -94,6 +94,7 @@ export default function RoomEditorPage() {
   const { roomNo } = useParams<{ roomNo: string }>();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const isCreateMode = roomNo === 'new';
 
@@ -250,6 +251,25 @@ export default function RoomEditorPage() {
       setUploading(true);
       const fileArray = Array.from(files);
       const res = await uploadRoomImages(formData.roomNo, fileArray);
+      setImages((prev) => [...prev, ...res.images]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setSuccessAlert({ isOpen: true, message: 'Изображения загружены' });
+    } catch (err) {
+      console.error('Failed to upload images:', err);
+      setErrorAlert({ isOpen: true, message: 'Ошибка при загрузке изображений' });
+    } finally {
+      setUploading(false);
+    }
+  }, [formData.roomNo]);
+
+  // Handle dropped image files (drag-and-drop)
+  const handleDroppedFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0 || !formData.roomNo) return;
+    try {
+      setUploading(true);
+      const res = await uploadRoomImages(formData.roomNo, files);
       setImages((prev) => [...prev, ...res.images]);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -440,7 +460,7 @@ export default function RoomEditorPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background py-12">
+      <div className="min-h-screen bg-background py-6 sm:py-12">
         <div className="max-w-3xl mx-auto px-4">
           <div className="flex items-center justify-center h-96">
             <div className="animate-pulse text-text/50">Загрузка...</div>
@@ -454,7 +474,7 @@ export default function RoomEditorPage() {
   const availableServices = allServices.filter((s) => !assignedServiceCodes.has(s.serviceCode));
 
   return (
-    <div className="min-h-screen bg-background py-12">
+    <div className="min-h-screen bg-background py-6 sm:py-12">
       <div className="max-w-3xl mx-auto px-4">
         {/* Back button */}
         <Button
@@ -467,7 +487,7 @@ export default function RoomEditorPage() {
         </Button>
 
         {/* Title */}
-        <h1 className="text-3xl font-bold text-text mt-8 mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-text mt-6 mb-6 sm:mt-8 sm:mb-8">
           {isCreateMode
             ? 'Создание номера'
             : `Редактирование номера ${formData.roomNo}`}
@@ -478,7 +498,7 @@ export default function RoomEditorPage() {
           <h2 className="text-lg font-bold text-text mb-6">Основная информация</h2>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="Номер комнаты"
                 type="text"
@@ -550,7 +570,7 @@ export default function RoomEditorPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="Базовая цена ($)"
+                label={`Базовая цена (${CURRENCY_SYMBOL})`}
                 type="number"
                 value={formData.basePrice}
                 onChange={(e) => handleInputChange('basePrice', parseFloat(e.target.value) || 0)}
@@ -584,7 +604,7 @@ export default function RoomEditorPage() {
 
         {/* Gallery Section (edit mode only) */}
         {!isCreateMode && (
-          <div className="bg-white p-8 rounded-xl shadow-lg border border-ui mb-8">
+          <div className="bg-white p-4 sm:p-8 rounded-xl shadow-lg border border-ui mb-8">
             <h2 className="text-lg font-bold text-text mb-6">Галерея</h2>
 
             <div className="mb-6">
@@ -596,20 +616,41 @@ export default function RoomEditorPage() {
                 onChange={handleFileUpload}
                 className="hidden"
               />
-              <Button
-                variant="secondary"
-                size="md"
-                icon={<Upload size={16} />}
-                onClick={() => fileInputRef.current?.click()}
-                isLoading={uploading}
-                className="w-full"
+              <div
+                className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
+                  isDragOver
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-300 hover:border-primary/50 hover:bg-ui/20'
+                } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
+                onClick={() => !uploading && fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragOver(false);
+                  const files = Array.from(e.dataTransfer.files).filter((f) =>
+                    f.type.startsWith('image/'),
+                  );
+                  handleDroppedFiles(files);
+                }}
               >
-                Загрузить изображения
-              </Button>
+                {uploading ? (
+                  <p className="text-sm text-text/50">Загрузка...</p>
+                ) : (
+                  <>
+                    <Upload size={28} className="text-text/30" />
+                    <p className="text-sm font-medium text-text/60">
+                      Нажмите или перетащите изображения сюда
+                    </p>
+                    <p className="text-xs text-text/40">PNG, JPG, WebP, GIF</p>
+                  </>
+                )}
+              </div>
             </div>
 
             {images.length > 0 ? (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {images.map((img) => (
                   <div key={img.imageId} className="relative group">
                     <img
@@ -642,7 +683,7 @@ export default function RoomEditorPage() {
 
         {/* Services Section (edit mode only) */}
         {!isCreateMode && (
-          <div className="bg-white p-8 rounded-xl shadow-lg border border-ui mb-8">
+          <div className="bg-white p-4 sm:p-8 rounded-xl shadow-lg border border-ui mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-text">Услуги</h2>
               <Button
@@ -662,32 +703,34 @@ export default function RoomEditorPage() {
                   return (
                     <div
                       key={entry.serviceCode}
-                      className="flex items-center justify-between p-3 border border-ui rounded-lg hover:bg-ui/30 transition"
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 border border-ui rounded-lg hover:bg-ui/30 transition"
                     >
-                      <div className="flex-1">
-                        <p className="font-semibold text-text">{service.title}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-text truncate">{service.title}</p>
                         <p className="text-xs text-text/50">
-                          ${Number(service.basePrice).toFixed(2)}{' '}
+                          {Number(service.basePrice).toFixed(2)} {CURRENCY_SYMBOL}{' '}
                           {service.priceType === 'PER_NIGHT' ? '/ ночь' : 'разово'}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <Select
-                          options={ROOM_SERVICE_STATE_OPTIONS}
-                          value={entry.defaultState}
-                          onChange={(e) =>
-                            handleUpdateServiceState(entry.serviceCode, e.target.value as RoomServiceState)
-                          }
-                          className="w-40"
-                        />
+                      <div className="flex items-stretch gap-2 shrink-0">
+                        <div className="flex-1 sm:flex-none sm:w-56">
+                          <Select
+                            options={ROOM_SERVICE_STATE_OPTIONS}
+                            value={entry.defaultState}
+                            onChange={(e) =>
+                              handleUpdateServiceState(entry.serviceCode, e.target.value as RoomServiceState)
+                            }
+                          />
+                        </div>
 
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          icon={<X size={16} />}
+                        <button
+                          className="inline-flex items-center justify-center rounded-md bg-red-500 text-white hover:bg-red-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 self-stretch aspect-square px-2"
                           onClick={() => handleRemoveService(entry.serviceCode)}
-                        >{''}</Button>
+                          title="Убрать услугу"
+                        >
+                          <X size={16} />
+                        </button>
                       </div>
                     </div>
                   );
