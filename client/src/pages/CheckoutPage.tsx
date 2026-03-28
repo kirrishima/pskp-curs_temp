@@ -138,6 +138,8 @@ function calcTotal(
 ): number {
   let total = (room.basePrice ?? 0) * nights;
   for (const rs of roomServices) {
+    // INCLUDED services are baked into basePrice — never charge extra
+    if (rs.defaultState === 'INCLUDED') continue;
     if (!selections[rs.serviceCode] || !rs.service?.isActive) continue;
     const price = rs.service.basePrice ?? 0;
     total += rs.service.priceType === 'PER_NIGHT' ? price * nights : price;
@@ -215,7 +217,10 @@ const PriceBreakdown = memo(function PriceBreakdown({
   compact,
 }: PriceBreakdownProps) {
   const total = calcTotal(room, roomServices, selections, nights);
-  const activeServices = roomServices.filter((rs) => selections[rs.serviceCode] && rs.service?.isActive);
+  // INCLUDED services are never listed as extra line items — their cost is in the room price
+  const activeServices = roomServices.filter(
+    (rs) => rs.defaultState !== 'INCLUDED' && selections[rs.serviceCode] && rs.service?.isActive,
+  );
 
   return (
     <div className={`bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2 ${compact ? 'text-sm' : ''}`}>
@@ -716,8 +721,12 @@ function Step2Confirmation({
   };
 
   // ── Active services for read-only display ─────────────────────────────────
+  // INCLUDED: always present, cost in basePrice. OPTIONAL: user-selected, charged extra.
+  const includedServices = roomServices.filter(
+    (rs) => rs.defaultState === 'INCLUDED' && rs.service?.isActive,
+  );
   const activeServices = roomServices.filter(
-    (rs) => selections[rs.serviceCode] && rs.service?.isActive,
+    (rs) => rs.defaultState !== 'INCLUDED' && selections[rs.serviceCode] && rs.service?.isActive,
   );
 
   // ── Terminal states ───────────────────────────────────────────────────────
@@ -823,10 +832,24 @@ function Step2Confirmation({
               </button>
             )}
           </div>
-          {activeServices.length === 0 ? (
+          {includedServices.length === 0 && activeServices.length === 0 ? (
             <p className="text-sm text-text/50">Дополнительные услуги не выбраны</p>
           ) : (
             <div className="space-y-1.5">
+              {includedServices.map((rs) => (
+                <div key={rs.serviceCode} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="flex-shrink-0">
+                      {getFeatureIcon({ iconUrl: rs.service.iconUrl, icon: rs.service.icon, size: 14, className: 'text-primary' })}
+                    </span>
+                    <span className="text-text/80">{rs.service.title}</span>
+                  </div>
+                  <span className="text-green-600 text-xs font-medium">Включено</span>
+                </div>
+              ))}
+              {includedServices.length > 0 && activeServices.length > 0 && (
+                <div className="border-t border-gray-200 my-1" />
+              )}
               {activeServices.map((rs) => {
                 const price = rs.service.basePrice ?? 0;
                 const lineTotal = rs.service.priceType === 'PER_NIGHT' ? price * nights : price;

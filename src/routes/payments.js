@@ -127,17 +127,22 @@ router.post('/create-intent', authenticate, async (req, res) => {
       const service = rs.service;
       if (!service.isActive) continue;
 
-      let include = false;
-      let sourceState = rs.defaultState;
-
       if (rs.defaultState === 'INCLUDED') {
-        // Always included, cannot be removed
-        include = true;
-      } else if (rs.defaultState === 'OPTIONAL_ON') {
-        // Included by default; user can opt out
+        // Always present, cannot be removed.
+        // Cost is already baked into room.basePrice — do NOT add to totalAmount.
+        bookingServicesData.push({
+          serviceCode: code,
+          sourceState: 'INCLUDED',
+          priceSnapshot: 0,
+        });
+        continue;
+      }
+
+      // OPTIONAL_ON / OPTIONAL_OFF: respect user selection
+      let include = false;
+      if (rs.defaultState === 'OPTIONAL_ON') {
         include = selections[code] !== false;
       } else if (rs.defaultState === 'OPTIONAL_OFF') {
-        // Not included by default; user can opt in
         include = selections[code] === true;
       }
 
@@ -150,7 +155,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
 
         bookingServicesData.push({
           serviceCode: code,
-          sourceState,
+          sourceState: rs.defaultState,
           priceSnapshot: priceForBooking,
         });
       }
