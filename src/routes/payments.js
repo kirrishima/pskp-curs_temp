@@ -93,15 +93,53 @@ router.post('/create-intent', authenticate, async (req, res) => {
     });
 
     if (overlap) {
-      // Recovery path: user's own PENDING booking from a failed previous attempt
-      // (e.g. Stripe.js was blocked by an ad blocker on the client side)
-      const isOwnPending =
-        overlap.userId === userId &&
-        overlap.status === 'PENDING' &&
-        overlap.payment?.status === 'PENDING' &&
-        overlap.hold?.expiresAt > new Date();
+      const now = new Date();
+      const holdExpired = overlap.hold && overlap.hold.expiresAt <= now;
+      const isPending = overlap.status === 'PENDING';
 
-      if (isOwnPending) {
+      // ─── Case 1: Any PENDING booking whose hold has expired — stale, clean up ──
+      if (isPending && holdExpired) {
+        logger.info('Cancelling stale booking with expired hold', {
+          bookingId: overlap.bookingId,
+          expiresAt: overlap.hold.expiresAt,
+        });
+
+        const txOps = [
+          prisma.booking.update({
+            where: { bookingId: overlap.bookingId },
+            data: { status: 'CANCELLED' },
+          }),
+          prisma.roomHold.update({
+            where: { holdId: overlap.holdId },
+            data: { status: 'CANCELLED' },
+          }),
+        ];
+        if (overlap.payment) {
+          txOps.push(
+            prisma.payment.update({
+              where: { id: overlap.payment.id },
+              data: { status: 'CANCELLED' },
+            }),
+          );
+          // Cancel the Stripe PI so no late payments can succeed
+          try {
+            await stripe.paymentIntents.cancel(overlap.payment.stripePaymentIntentId);
+          } catch (stripeErr) {
+            // PI might already be in a terminal state — that's fine
+            logger.warn('Could not cancel expired PI', { error: stripeErr.message });
+          }
+        }
+        await prisma.$transaction(txOps);
+        // Fall through to create a new booking
+      }
+
+      // ─── Case 2: User's own PENDING booking, hold still active — resume ──
+      else if (
+        overlap.userId === userId &&
+        isPending &&
+        overlap.payment?.status === 'PENDING' &&
+        !holdExpired
+      ) {
         const pi = await stripe.paymentIntents.retrieve(overlap.payment.stripePaymentIntentId);
         const recoverableStatuses = [
           'requires_payment_method',
@@ -130,7 +168,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
           });
         }
 
-        // PaymentIntent is in a terminal state — cancel the stale records and allow re-creation
+        // PI is in a terminal state — cancel stale records and re-create
         logger.info('Cancelling stale booking with terminal PI, allowing re-creation', {
           bookingId: overlap.bookingId,
           piStatus: pi.status,
@@ -150,7 +188,10 @@ router.post('/create-intent', authenticate, async (req, res) => {
           }),
         ]);
         // Fall through to create a new booking
-      } else {
+      }
+
+      // ─── Case 3: Genuine conflict (confirmed booking, or another user's active hold) ──
+      else {
         return res.status(409).json({ error: 'Room is already booked for the selected dates' });
       }
     }

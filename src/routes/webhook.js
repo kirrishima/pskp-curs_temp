@@ -188,15 +188,27 @@ async function _onPaymentSucceeded(paymentIntent) {
 
   const targetUserId = userId || payment.booking.userId;
   if (targetUserId) wsManager.notifyUser(targetUserId, notification);
-  wsManager.broadcast({ ...notification, broadcastType: 'BOOKING_CONFIRMED' });
 }
 
 // ── payment_intent.payment_failed ────────────────────────────────────────────
 
 async function _onPaymentFailed(paymentIntent) {
+  // A charge attempt failed but the PaymentIntent remains active
+  // (status: requires_payment_method). The user can retry with a different card.
+  // Do NOT cancel the booking or release the hold.
   const { userId } = paymentIntent.metadata || {};
-  logger.info('PaymentIntent failed', { stripeId: paymentIntent.id });
-  await _releaseBooking(paymentIntent.id, 'FAILED', userId);
+  logger.info('PaymentIntent attempt failed (non-terminal, user can retry)', {
+    stripeId: paymentIntent.id,
+  });
+
+  // Send non-terminal notification so the client knows, but don't cancel anything
+  if (userId) {
+    wsManager.notifyUser(userId, {
+      type: 'PAYMENT_ATTEMPT_FAILED',
+      bookingId: paymentIntent.metadata?.bookingId,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
 
 // ── payment_intent.canceled ──────────────────────────────────────────────────
@@ -273,7 +285,6 @@ async function _releaseBooking(stripePaymentIntentId, paymentStatus, userId) {
 
   const targetUserId = userId || payment.booking.userId;
   if (targetUserId) wsManager.notifyUser(targetUserId, notification);
-  wsManager.broadcast({ ...notification, broadcastType: 'BOOKING_CANCELLED' });
 }
 
 module.exports = router;

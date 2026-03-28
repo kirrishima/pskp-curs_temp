@@ -15,8 +15,9 @@
  *   Read-only summary of everything selected.
  *   "Book and pay" button triggers ONE call to POST /api/payments/create-intent.
  *   Stripe Elements appear inline below the summary.
- *   WebSocket notifications (PAYMENT_SUCCEEDED / PAYMENT_FAILED / PAYMENT_CANCELLED)
- *   update the page without any polling.
+ *   WebSocket notifications (PAYMENT_SUCCEEDED / PAYMENT_CANCELLED)
+ *   update the page for terminal events only. Non-terminal payment errors
+ *   (card declined) are handled inline by the Stripe form.
  *
  * The payment intent is created explicitly on button click (not in a useEffect),
  * which prevents React StrictMode's double-invoke from sending duplicate requests.
@@ -628,6 +629,8 @@ function Step2Confirmation({
 
   // Guard against double-click
   const creatingRef = useRef(false);
+  // Keep bookingId accessible from timer callback without stale closures
+  const bookingIdRef = useRef<string | null>(null);
 
   // ── Hold countdown ─────────────────────────────────────────────────────────
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -639,6 +642,12 @@ function Step2Confirmation({
       if (diff <= 0) {
         setTimeLeft('00:00');
         if (timerRef.current) clearInterval(timerRef.current);
+        // Hold expired — cancel booking and show message
+        setErrorMsg('Время резервации истекло. Попробуйте забронировать заново.');
+        setPhase('cancelled');
+        if (bookingIdRef.current) {
+          cancelBooking(bookingIdRef.current).catch(() => {});
+        }
         return;
       }
       const m = Math.floor(diff / 60000);
@@ -650,17 +659,24 @@ function Step2Confirmation({
   }, []);
 
   // ── WS handler ────────────────────────────────────────────────────────────
+  // Only react to terminal events for OUR booking. Non-terminal failures
+  // (card declined) are handled inline by the Stripe form — no phase change.
   const handleWsMessage = useCallback((msg: WsMessage) => {
-    if (msg.type === 'PAYMENT_SUCCEEDED') setPhase('succeeded');
-    else if (msg.type === 'PAYMENT_FAILED') {
-      setPhase('failed');
-      setErrorMsg('Платёж не прошёл. Попробуйте другую карту.');
-    } else if (msg.type === 'PAYMENT_CANCELLED') setPhase('cancelled');
+    // Ignore messages for other bookings
+    if (msg.bookingId && msg.bookingId !== bookingIdRef.current) return;
+
+    if (msg.type === 'PAYMENT_SUCCEEDED') {
+      setPhase('succeeded');
+    } else if (msg.type === 'PAYMENT_CANCELLED') {
+      setPhase('cancelled');
+    }
+    // PAYMENT_ATTEMPT_FAILED is non-terminal — Stripe form shows the error inline
   }, []);
 
+  // Connect WS only during active payment phases
   useWebSocket({
     userId,
-    enabled: phase !== 'idle' && phase !== 'succeeded' && phase !== 'error',
+    enabled: phase === 'ready' || phase === 'submitted',
     onMessage: handleWsMessage,
   });
 
@@ -688,6 +704,7 @@ function Step2Confirmation({
 
       setClientSecret(result.clientSecret);
       setBookingId(result.bookingId);
+      bookingIdRef.current = result.bookingId;
       setServerTotal(result.totalAmount);
       setCurrency(result.currency);
       const expiry = result.expiresAt
@@ -776,23 +793,15 @@ function Step2Confirmation({
       <div className="space-y-4">
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <XCircle size={36} className="text-red-500" />
-          <h3 className="font-semibold text-text">Платёж не прошёл</h3>
+          <h3 className="font-semibold text-text">Произошла ошибка</h3>
           <p className="text-sm text-text/60">{errorMsg}</p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => navigate('/rooms')}
-            className="flex-1 border border-gray-300 text-text/70 rounded-xl py-3 hover:border-gray-400 transition-colors"
-          >
-            К номерам
-          </button>
-          <button
-            onClick={() => { setPhase('ready'); setErrorMsg(null); }}
-            className="flex-1 bg-primary text-white rounded-xl py-3 font-medium hover:bg-primary/90 transition-colors"
-          >
-            Попробовать снова
-          </button>
-        </div>
+        <button
+          onClick={() => navigate('/rooms')}
+          className="w-full border border-gray-300 text-text/70 rounded-xl py-3 hover:border-gray-400 transition-colors"
+        >
+          К номерам
+        </button>
       </div>
     );
   }

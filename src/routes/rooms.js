@@ -193,6 +193,11 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
     // We exclude rooms that have any non-cancelled booking overlapping the dates.
 
     if (!isAdmin) {
+      const now = new Date();
+
+      // Exclude rooms with overlapping non-cancelled bookings.
+      // PENDING bookings whose hold has already expired are treated as stale
+      // (they will be cleaned up on the next create-intent call) and ignored.
       const overlapCondition = {
         bookings: {
           none: {
@@ -200,12 +205,19 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
               { startDate: { lt: checkOutDate } },
               { endDate: { gt: checkInDate } },
               { status: { notIn: ['CANCELLED'] } },
+              // Exclude stale PENDING bookings with expired holds
+              {
+                OR: [
+                  { status: { not: 'PENDING' } },           // CONFIRMED etc. always block
+                  { hold: { expiresAt: { gt: now } } },     // PENDING with active hold blocks
+                ],
+              },
             ],
           },
         },
       };
 
-      // Also check room_holds that are ACTIVE and overlap
+      // Also check room_holds that are ACTIVE and not yet expired
       const holdOverlapCondition = {
         roomHolds: {
           none: {
@@ -213,6 +225,7 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
               { startDate: { lt: checkOutDate } },
               { endDate: { gt: checkInDate } },
               { status: 'ACTIVE' },
+              { expiresAt: { gt: now } },
             ],
           },
         },
