@@ -22,6 +22,7 @@ const { getConfig } = require('../config');
 const { getStripe } = require('../services/stripe');
 const prisma = require('../services/prisma');
 const wsManager = require('../services/websocket');
+const { sendBookingConfirmation } = require('../services/email');
 
 const logger = createLogger('Webhook');
 const router = Router();
@@ -146,6 +147,37 @@ async function _onPaymentSucceeded(paymentIntent) {
   await prisma.$transaction(txOps);
 
   logger.info('Booking confirmed', { bookingId: payment.bookingId });
+
+  // ── Send booking confirmation email ─────────────────────────────────────────
+  try {
+    const fullBooking = await prisma.booking.findUnique({
+      where: { bookingId: payment.bookingId },
+      include: {
+        user: true,
+        room: {
+          include: {
+            hotel: true,
+            images: { where: { isMain: true }, take: 1 },
+          },
+        },
+        bookingServices: {
+          include: { service: true },
+          orderBy: { serviceCode: 'asc' },
+        },
+        payment: true,
+      },
+    });
+
+    if (fullBooking && fullBooking.user?.email) {
+      await sendBookingConfirmation(fullBooking);
+    }
+  } catch (err) {
+    // Email errors must not interrupt the payment success flow
+    logger.error('Failed to send booking confirmation email', {
+      bookingId: payment.bookingId,
+      error: err.message,
+    });
+  }
 
   const notification = {
     type: 'PAYMENT_SUCCEEDED',
