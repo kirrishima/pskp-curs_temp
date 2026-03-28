@@ -146,6 +146,34 @@ async function main() {
     console.log(`  ${rs.roomNo} ← ${rs.serviceCode} [${rs.defaultState}] — OK`);
   }
 
+  // ── Seed demo users (one per role) ───────────────────────────────────────
+
+  console.log('\nSeeding demo users...');
+
+  const HASHED_PASSWORD = '$2a$12$TB7f4Vvs3ohQGodEC25nvOIeI/xwk5vf2tyF/nz1GD0UP/t/kiqkK';
+
+  const usersData = [
+    { email: 'user@u.com',    roleName: 'user',    firstName: 'User',    lastName: 'Demo' },
+    { email: 'manager@u.com', roleName: 'manager', firstName: 'Manager', lastName: 'Demo' },
+    { email: 'admin@u.com',   roleName: 'admin',   firstName: 'Admin',   lastName: 'Demo' },
+  ];
+
+  for (const u of usersData) {
+    const role = await prisma.role.findUnique({ where: { name: u.roleName } });
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: {},
+      create: {
+        email: u.email,
+        password: HASHED_PASSWORD,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        roleId: role.id,
+      },
+    });
+    console.log(`  User "${u.email}" (role: ${u.roleName}) — OK`);
+  }
+
   console.log('\nSeed complete.');
 }
 
