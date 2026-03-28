@@ -63,6 +63,7 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
       hotelCode,
       floor,
       title,
+      roomNo: roomNoFilter,  // exact-match filter for single-room availability checks
       minPrice,
       maxPrice,
       minBeds,
@@ -131,6 +132,11 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
 
     if (title) {
       where.title = { contains: title, mode: 'insensitive' };
+    }
+
+    // Exact roomNo match — used for single-room availability checks
+    if (roomNoFilter) {
+      where.roomNo = roomNoFilter;
     }
 
     // Price range

@@ -622,8 +622,11 @@ const RoomSearchPage = memo(function RoomSearchPage() {
   // ── Room actions ──────────────────────────────────────────────────────────
 
   const handleViewRoom = useCallback(
-    (room: Room) => navigate(`/rooms/${room.roomNo}`),
-    [navigate],
+    (room: Room) =>
+      navigate(`/rooms/${room.roomNo}`, {
+        state: { checkIn: topCheckIn, checkOut: topCheckOut },
+      }),
+    [navigate, topCheckIn, topCheckOut],
   );
   const handleEditRoom = useCallback(
     (room: Room) => navigate(`/admin/rooms/${room.roomNo}`),

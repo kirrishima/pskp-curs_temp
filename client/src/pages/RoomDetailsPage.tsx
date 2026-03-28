@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Users,
@@ -46,13 +46,20 @@ interface DateSelection {
 export default function RoomDetailsPage() {
   const { roomNo } = useParams<{ roomNo: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAppSelector((s) => s.auth.user);
   const isAdmin = user?.role?.name === 'admin';
+
+  // Dates can be pre-filled when coming from the search page.
+  const locationState = location.state as { checkIn?: string; checkOut?: string } | null;
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dates, setDates] = useState<DateSelection>({ checkIn: '', checkOut: '' });
+  const [dates, setDates] = useState<DateSelection>({
+    checkIn: locationState?.checkIn ?? '',
+    checkOut: locationState?.checkOut ?? '',
+  });
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // Modals
@@ -191,9 +198,13 @@ export default function RoomDetailsPage() {
     );
   }
 
-  // Get main image
-  const mainImage = room.images?.find((img) => img.isMain) || room.images?.[0];
-  const otherImages = room.images?.filter((img) => !img.isMain).slice(0, 4) || [];
+  // Get main image — prefer the one flagged isMain, otherwise fall back to index 0.
+  // Exclude the selected main image from the "other" list by imageId so it never
+  // appears twice even when no image has isMain === true.
+  const mainImage = room.images?.find((img) => img.isMain) ?? room.images?.[0];
+  const otherImages = mainImage
+    ? (room.images?.filter((img) => img.imageId !== mainImage.imageId).slice(0, 4) ?? [])
+    : [];
 
   // Status badge config
   const statusConfig: Record<string, { label: string; variant: any }> = {
@@ -241,12 +252,8 @@ export default function RoomDetailsPage() {
                 </div>
               ))}
 
-              {/* Placeholder if not enough images */}
-              {otherImages.length < 4 && (
-                <div className="flex items-center justify-center bg-ui rounded-lg shadow-md">
-                  <span className="text-text/50 text-sm">Нет фото</span>
-                </div>
-              )}
+              {/* No extra placeholder — if there are fewer than 4 side images the
+                  grid simply leaves the unused columns empty. */}
             </div>
           ) : (
             <div className="w-full h-80 bg-ui rounded-lg shadow-lg flex items-center justify-center">

@@ -80,6 +80,8 @@ export interface RoomSearchParams {
   hotelCode?: string;
   floor?: number | string;
   title?: string;
+  /** Exact roomNo match — filters the search to a single room (used for availability checks). */
+  roomNo?: string;
   minPrice?: number | string;
   maxPrice?: number | string;
   minBeds?: number | string;
@@ -266,6 +268,8 @@ export interface CreatePaymentIntentResult {
   currency: string;
   nights: number;
   services: Array<{ serviceCode: string; sourceState: string; priceSnapshot: number }>;
+  /** ISO timestamp until which the hold is active. Falls back to 5 min if absent. */
+  expiresAt?: string;
 }
 
 export async function createPaymentIntent(
@@ -294,8 +298,8 @@ export async function getStripeConfig(): Promise<{ stripePublishableKey: string 
 
 /**
  * Checks whether a specific room is available for the given date range.
- * Uses the room search endpoint (which filters out held/booked rooms) and
- * confirms the target roomNo appears in results.
+ * Passes the roomNo as an exact filter so the backend returns at most one
+ * record instead of fetching the entire hotel's room list.
  */
 export async function checkRoomAvailability(
   roomNo: string,
@@ -303,6 +307,6 @@ export async function checkRoomAvailability(
   checkOut: string,
   hotelCode: string,
 ): Promise<boolean> {
-  const result = await searchRooms({ checkIn, checkOut, hotelCode, limit: 200 });
-  return result.rooms.some((r) => r.roomNo === roomNo);
+  const result = await searchRooms({ checkIn, checkOut, hotelCode, roomNo, limit: 1 });
+  return result.rooms.length > 0;
 }

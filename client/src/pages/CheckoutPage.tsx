@@ -45,6 +45,8 @@ import {
   Pencil,
 } from 'lucide-react';
 
+import axios from 'axios';
+
 import useAppSelector from '@/hooks/useAppSelector';
 import { useWebSocket, type WsMessage } from '@/hooks/useWebSocket';
 import { createPaymentIntent, cancelBooking } from '@/api/hotelApi';
@@ -626,6 +628,8 @@ function Step2Confirmation({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [timeLeft, setTimeLeft] = useState<string>('');
+  // Distinguishes timer-expiry cancellation from user-initiated cancellation
+  const [timerExpired, setTimerExpired] = useState(false);
 
   // Guard against double-click
   const creatingRef = useRef(false);
@@ -643,7 +647,8 @@ function Step2Confirmation({
         setTimeLeft('00:00');
         if (timerRef.current) clearInterval(timerRef.current);
         // Hold expired — cancel booking and show message
-        setErrorMsg('Время резервации истекло. Попробуйте забронировать заново.');
+        setTimerExpired(true);
+        setErrorMsg('Время резервации истекло. Номер освобождён.');
         setPhase('cancelled');
         if (bookingIdRef.current) {
           cancelBooking(bookingIdRef.current).catch(() => {});
@@ -713,10 +718,26 @@ function Step2Confirmation({
       startTimer(expiry);
       setPhase('ready');
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Не удалось создать бронь. Возможно, номер уже занят на эти даты.';
+      let msg = 'Не удалось создать бронь. Попробуйте ещё раз.';
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const serverMsg: string = err.response?.data?.error ?? '';
+        if (status === 409) {
+          if (serverMsg.includes('currently being reserved')) {
+            msg =
+              'Номер сейчас заблокирован другим пользователем для оплаты. ' +
+              'Пожалуйста, подождите несколько минут и попробуйте снова.';
+          } else if (serverMsg.includes('already booked')) {
+            msg =
+              'Номер уже забронирован на выбранные даты. ' +
+              'Пожалуйста, выберите другие даты или другой номер.';
+          } else {
+            msg =
+              'Номер недоступен для бронирования на выбранные даты. ' +
+              'Пожалуйста, выберите другой номер или измените даты.';
+          }
+        }
+      }
       setErrorMsg(msg);
       setPhase('error');
     } finally {
@@ -773,6 +794,49 @@ function Step2Confirmation({
   }
 
   if (phase === 'cancelled') {
+    const handleRebook = () => {
+      // Reset all payment state and go back to the confirmation summary
+      setPhase('idle');
+      setClientSecret(null);
+      setBookingId(null);
+      bookingIdRef.current = null;
+      setServerTotal(0);
+      setErrorMsg(null);
+      setTimerExpired(false);
+      setTimeLeft('');
+      creatingRef.current = false;
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+
+    if (timerExpired) {
+      return (
+        <div className="flex flex-col items-center gap-4 py-10 text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+            <Clock size={32} className="text-amber-500" />
+          </div>
+          <h3 className="font-semibold text-text">Время резервации истекло</h3>
+          <p className="text-sm text-text/60 max-w-sm">
+            Номер был освобождён, так как оплата не поступила в отведённое время.
+            Вы можете попробовать забронировать снова — все введённые данные сохранены.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 mt-2 w-full max-w-xs">
+            <button
+              onClick={handleRebook}
+              className="flex-1 bg-primary text-white font-semibold rounded-xl px-6 py-3 hover:bg-primary/90 transition-colors"
+            >
+              Забронировать снова
+            </button>
+            <button
+              onClick={() => navigate('/rooms')}
+              className="flex-1 border border-gray-300 text-text/70 font-medium rounded-xl px-6 py-3 hover:border-gray-400 transition-colors"
+            >
+              К номерам
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col items-center gap-4 py-10 text-center">
         <XCircle size={40} className="text-gray-400" />
