@@ -15,7 +15,9 @@
     "@reduxjs/toolkit": "^2.5.0",
     "react-redux": "^9.2.0",
     "axios": "^1.7.9",
-    "lucide-react": "^0.460.0"
+    "lucide-react": "^0.460.0",
+    "@stripe/stripe-js": "^4.0.0",
+    "@stripe/react-stripe-js": "^3.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

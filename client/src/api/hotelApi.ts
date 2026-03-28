@@ -245,3 +245,64 @@ export async function bulkSetRoomServices(
   const { data } = await api.put(`/room-services/${roomNo}`, { services });
   return data;
 }
+
+// ── Payments / Bookings ──────────────────────────────────────────────────────
+
+export interface CreatePaymentIntentParams {
+  roomNo: string;
+  checkIn: string;
+  checkOut: string;
+  selectedServices?: Record<string, boolean>;
+  notes?: string;
+  currency?: string;
+}
+
+export interface CreatePaymentIntentResult {
+  bookingId: string;
+  holdId: string;
+  paymentId: string;
+  clientSecret: string;
+  totalAmount: number;
+  currency: string;
+  nights: number;
+  services: Array<{ serviceCode: string; sourceState: string; priceSnapshot: number }>;
+}
+
+export async function createPaymentIntent(
+  params: CreatePaymentIntentParams,
+): Promise<CreatePaymentIntentResult> {
+  const { data } = await api.post('/payments/create-intent', params);
+  return data;
+}
+
+export async function getBooking(
+  bookingId: string,
+): Promise<import('@/types').Booking> {
+  const { data } = await api.get(`/payments/${bookingId}`);
+  return data.booking;
+}
+
+export async function cancelBooking(bookingId: string): Promise<{ message: string }> {
+  const { data } = await api.post(`/payments/cancel/${bookingId}`);
+  return data;
+}
+
+export async function getStripeConfig(): Promise<{ stripePublishableKey: string }> {
+  const { data } = await api.get('/payments/config');
+  return data;
+}
+
+/**
+ * Checks whether a specific room is available for the given date range.
+ * Uses the room search endpoint (which filters out held/booked rooms) and
+ * confirms the target roomNo appears in results.
+ */
+export async function checkRoomAvailability(
+  roomNo: string,
+  checkIn: string,
+  checkOut: string,
+  hotelCode: string,
+): Promise<boolean> {
+  const result = await searchRooms({ checkIn, checkOut, hotelCode, limit: 200 });
+  return result.rooms.some((r) => r.roomNo === roomNo);
+}

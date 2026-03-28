@@ -16,6 +16,7 @@ import RoomDetailsPage from '@/pages/RoomDetailsPage';
 import RoomEditorPage from '@/pages/RoomEditorPage';
 import ServicesPage from '@/pages/ServicesPage';
 import HotelsPage from '@/pages/HotelsPage';
+import CheckoutPage from '@/pages/CheckoutPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
 
@@ -186,6 +187,7 @@ function AppContent() {
 
           {/* Protected */}
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
 
           {/* Admin */}
           <Route path="/admin/rooms/new" element={<AdminRoute><RoomEditorPage /></AdminRoute>} />

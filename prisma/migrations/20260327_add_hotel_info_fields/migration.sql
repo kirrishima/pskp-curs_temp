@@ -1,7 +1,0 @@
--- Add hotel landing page fields
-ALTER TABLE "hotels" ADD COLUMN IF NOT EXISTS "tagline" TEXT;
-ALTER TABLE "hotels" ADD COLUMN IF NOT EXISTS "about_text" TEXT;
-ALTER TABLE "hotels" ADD COLUMN IF NOT EXISTS "hero_image_url" TEXT;
-ALTER TABLE "hotels" ADD COLUMN IF NOT EXISTS "stars" INTEGER;
-ALTER TABLE "hotels" ADD COLUMN IF NOT EXISTS "latitude" DECIMAL(10, 7);
-ALTER TABLE "hotels" ADD COLUMN IF NOT EXISTS "longitude" DECIMAL(10, 7);

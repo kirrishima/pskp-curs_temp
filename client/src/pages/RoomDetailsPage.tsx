@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Wifi,
@@ -19,7 +19,7 @@ import AlertModal from '@/components/modals/AlertModal';
 import Input from '@/components/ui/Input';
 import { API_BASE_URL } from '@/api/axiosInstance';
 
-import { getRoom, deleteRoom } from '@/api/hotelApi';
+import { getRoom, deleteRoom, checkRoomAvailability } from '@/api/hotelApi';
 import { getRoomServiceStateLabel } from '@/utils/roomServiceStates';
 import type { Room } from '@/types';
 
@@ -45,7 +45,6 @@ interface DateSelection {
 export default function RoomDetailsPage() {
   const { roomNo } = useParams<{ roomNo: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const user = useAppSelector((s) => s.auth.user);
   const isAdmin = user?.role?.name === 'admin';
 
@@ -53,6 +52,7 @@ export default function RoomDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<DateSelection>({ checkIn: '', checkOut: '' });
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // Modals
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -107,21 +107,57 @@ export default function RoomDetailsPage() {
     }
   }, [roomNo, navigate]);
 
-  // Handle booking
-  const handleBooking = useCallback(() => {
+  // Handle booking — checks availability before navigating
+  const handleBooking = useCallback(async () => {
+    if (!room) return;
+
     if (!dates.checkIn || !dates.checkOut) {
       setErrorMessage('Пожалуйста, выберите даты заезда и выезда');
       setErrorAlertOpen(true);
       return;
     }
 
-    navigate('/checkout', {
-      state: {
-        room,
-        checkInDate: dates.checkIn,
-        checkOutDate: dates.checkOut,
-      },
-    });
+    if (new Date(dates.checkOut) <= new Date(dates.checkIn)) {
+      setErrorMessage('Дата выезда должна быть позже даты заезда');
+      setErrorAlertOpen(true);
+      return;
+    }
+
+    setCheckingAvailability(true);
+    try {
+      const available = await checkRoomAvailability(
+        room.roomNo,
+        dates.checkIn,
+        dates.checkOut,
+        room.hotelCode,
+      );
+
+      if (!available) {
+        setErrorMessage('К сожалению, этот номер уже занят на выбранные даты. Попробуйте другие даты.');
+        setErrorAlertOpen(true);
+        return;
+      }
+
+      navigate('/checkout', {
+        state: {
+          room,
+          checkInDate: dates.checkIn,
+          checkOutDate: dates.checkOut,
+        },
+      });
+    } catch {
+      // If availability check fails, proceed optimistically — the server will
+      // catch conflicts at payment-intent creation time.
+      navigate('/checkout', {
+        state: {
+          room,
+          checkInDate: dates.checkIn,
+          checkOutDate: dates.checkOut,
+        },
+      });
+    } finally {
+      setCheckingAvailability(false);
+    }
   }, [room, dates, navigate]);
 
   if (loading) {
@@ -406,9 +442,11 @@ export default function RoomDetailsPage() {
                       size="md"
                       className="w-full"
                       onClick={handleBooking}
-                      icon={<DollarSign size={16} />}
+                      disabled={checkingAvailability}
+                      isLoading={checkingAvailability}
+                      icon={!checkingAvailability ? <DollarSign size={16} /> : undefined}
                     >
-                      Перейти к оформлению
+                      {checkingAvailability ? 'Проверяем доступность…' : 'Перейти к оформлению'}
                     </Button>
                   </div>
                 </div>
