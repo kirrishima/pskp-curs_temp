@@ -336,15 +336,17 @@ export interface CancelBookingResult {
 
 export async function getMyBookings(
   params?: GetBookingsParams,
+  signal?: AbortSignal,
 ): Promise<{ bookings: import('@/types').Booking[] }> {
-  const { data } = await api.get('/bookings', { params });
+  const { data } = await api.get('/bookings', { params, signal });
   return data;
 }
 
 export async function getBookingById(
   bookingId: string,
+  signal?: AbortSignal,
 ): Promise<{ booking: import('@/types').Booking }> {
-  const { data } = await api.get(`/bookings/${bookingId}`);
+  const { data } = await api.get(`/bookings/${bookingId}`, { signal });
   return data;
 }
 

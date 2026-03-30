@@ -149,21 +149,31 @@ export default function BookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getMyBookings(statusFilter ? { status: statusFilter } : undefined);
-      setBookings(result.bookings);
-    } catch {
+      const result = await getMyBookings(
+        statusFilter ? { status: statusFilter } : undefined,
+        signal,
+      );
+      if (!signal?.aborted) {
+        setBookings(result.bookings);
+      }
+    } catch (err) {
+      if (signal?.aborted) return;
       setError('Не удалось загрузить бронирования. Пожалуйста, попробуйте позже.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [statusFilter]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
 
   const filtered = bookings; // server-side filtering; kept as-is for local re-renders
@@ -209,7 +219,7 @@ export default function BookingsPage() {
           <p className="text-text/60">{error}</p>
           <button
             type="button"
-            onClick={load}
+            onClick={() => load()}
             className="mt-2 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors"
           >
             Попробовать снова

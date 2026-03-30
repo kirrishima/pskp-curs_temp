@@ -22,6 +22,7 @@ const uploadRoutes = require('./routes/uploads');
 const wsManager = require('./services/websocket');
 const { runMigrations } = require('./services/migrate');
 const { scheduleNoShowProcessing } = require('./services/noshow');
+const { scheduleHoldExpiryProcessing } = require('./services/hold-expiry');
 
 const logger = createLogger('Server');
 const app = express();
@@ -77,6 +78,7 @@ startConfigWatcher();
 // ── Startup tasks (non-blocking) ─────────────────────────────────────────────
 runMigrations().catch((err) => logger.error('Startup migration failed', { error: err.message }));
 scheduleNoShowProcessing();
+scheduleHoldExpiryProcessing();
 
 // Try HTTPS first, fall back to HTTP if certs are missing
 let server;

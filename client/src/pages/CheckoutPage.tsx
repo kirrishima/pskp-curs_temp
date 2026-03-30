@@ -633,6 +633,8 @@ function Step2Confirmation({
 
   // Guard against double-click
   const creatingRef = useRef(false);
+  // Guard against duplicate cancel calls
+  const cancellingRef = useRef(false);
   // Keep bookingId accessible from timer callback without stale closures
   const bookingIdRef = useRef<string | null>(null);
 
@@ -646,13 +648,12 @@ function Step2Confirmation({
       if (diff <= 0) {
         setTimeLeft('00:00');
         if (timerRef.current) clearInterval(timerRef.current);
-        // Hold expired — cancel booking and show message
+        // Hold expired — show visual feedback only.
+        // The SERVER handles actual hold expiration and booking cancellation
+        // via the hold-expiry scheduler, then notifies us via WebSocket.
         setTimerExpired(true);
         setErrorMsg('Время резервации истекло. Номер освобождён.');
         setPhase('cancelled');
-        if (bookingIdRef.current) {
-          cancelBooking(bookingIdRef.current).catch(() => {});
-        }
         return;
       }
       const m = Math.floor(diff / 60000);
@@ -661,6 +662,11 @@ function Step2Confirmation({
     };
     tick();
     timerRef.current = setInterval(tick, 1000);
+  }, []);
+
+  // Cleanup timer — declared before handleWsMessage so it can be referenced
+  const cleanupTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
   // ── WS handler ────────────────────────────────────────────────────────────
@@ -674,9 +680,15 @@ function Step2Confirmation({
       setPhase('succeeded');
     } else if (msg.type === 'PAYMENT_CANCELLED') {
       setPhase('cancelled');
+    } else if (msg.type === 'HOLD_EXPIRED') {
+      // Server-side hold expiration — authoritative decision
+      cleanupTimer();
+      setTimerExpired(true);
+      setErrorMsg((msg.message as string) || 'Время резервации истекло. Номер освобождён.');
+      setPhase('cancelled');
     }
     // PAYMENT_ATTEMPT_FAILED is non-terminal — Stripe form shows the error inline
-  }, []);
+  }, [cleanupTimer]);
 
   // Connect WS only during active payment phases
   useWebSocket({
@@ -684,12 +696,6 @@ function Step2Confirmation({
     enabled: phase === 'ready' || phase === 'submitted',
     onMessage: handleWsMessage,
   });
-
-  // Cleanup timer on unmount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const cleanupTimer = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-  }, []);
 
   // ── Create intent on button click ─────────────────────────────────────────
   const handleBook = async () => {
@@ -747,8 +753,10 @@ function Step2Confirmation({
 
   // ── Cancel booking ────────────────────────────────────────────────────────
   const handleCancel = async () => {
+    if (cancellingRef.current) return;
+    cancellingRef.current = true;
     cleanupTimer();
-    if (!bookingId) { setPhase('cancelled'); return; }
+    if (!bookingId) { setPhase('cancelled'); cancellingRef.current = false; return; }
     setCancelling(true);
     try {
       await cancelBooking(bookingId);
@@ -756,6 +764,7 @@ function Step2Confirmation({
       // ignore — treat as cancelled either way
     } finally {
       setCancelling(false);
+      cancellingRef.current = false;
       setPhase('cancelled');
     }
   };

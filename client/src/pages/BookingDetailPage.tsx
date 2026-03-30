@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -206,6 +206,7 @@ function CancelModal({ booking, isStaff, onClose, onSuccess }: CancelModalProps)
   const [reason, setReason] = useState('');
   const [applyPenalty, setApplyPenalty] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   const hoursUntilCheckIn = getHoursUntilCheckIn(booking.startDate);
   const isPending = booking.status === 'PENDING';
@@ -224,6 +225,11 @@ function CancelModal({ booking, isStaff, onClose, onSuccess }: CancelModalProps)
   const canSubmit = step === 'form' && (source !== 'ADMIN' || reason.trim().length > 0);
 
   const handleSubmit = useCallback(async () => {
+    // Ref-based guard: prevents duplicate submission even if React
+    // batches state updates and the button re-renders before step changes
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     setStep('processing');
     setErrorMsg(null);
     try {
@@ -239,6 +245,8 @@ function CancelModal({ booking, isStaff, onClose, onSuccess }: CancelModalProps)
         err instanceof Error ? err.message : 'Не удалось отменить бронирование.';
       setErrorMsg(msg);
       setStep('error');
+    } finally {
+      submittingRef.current = false;
     }
   }, [booking.bookingId, source, applyPenalty, reason, onSuccess]);
 
@@ -437,29 +445,36 @@ export default function BookingDetailPage() {
     refundStatus: string;
   } | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (!bookingId) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getBookingById(bookingId);
-      setBooking(result.booking);
-    } catch {
+      const result = await getBookingById(bookingId, signal);
+      if (!signal?.aborted) {
+        setBooking(result.booking);
+      }
+    } catch (err) {
+      if (signal?.aborted) return;
       setError('Бронирование не найдено или у вас нет доступа к нему.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [bookingId]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
 
   const handleCancelSuccess = useCallback(
     (result: { refundAmount: number; penaltyAmount: number; refundStatus: string }) => {
       setShowCancel(false);
       setCancelResult(result);
-      // Refresh booking data to reflect new status
+      // Refresh booking data to reflect new status (no signal — user-initiated)
       load();
     },
     [load],
