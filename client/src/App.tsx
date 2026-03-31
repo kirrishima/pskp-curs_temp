@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { User as UserIcon, LogOut, ChevronDown, CalendarDays } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import useAppDispatch from '@/hooks/useAppDispatch';
@@ -24,20 +24,36 @@ import BookingDetailPage from '@/pages/BookingDetailPage';
 
 const ProtectedRoute = memo(function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const user = useAppSelector((s) => s.auth.user);
-  if (!user) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   return children;
 });
 
 const AdminRoute = memo(function AdminRoute({ children }: { children: React.ReactElement }) {
   const user = useAppSelector((s) => s.auth.user);
-  if (!user) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   if (user.role?.name !== 'admin') return <Navigate to="/" replace />;
   return children;
 });
 
 const GuestRoute = memo(function GuestRoute({ children }: { children: React.ReactElement }) {
   const user = useAppSelector((s) => s.auth.user);
-  if (user) return <Navigate to="/" replace />;
+  const location = useLocation();
+
+  if (user) {
+    // If we arrived here from a ProtectedRoute redirect, return to that page
+    // (including its navigation state, e.g. room + dates for /checkout).
+    const from = (location.state as { from?: any } | null)?.from;
+    return (
+      <Navigate
+        to={from ? from.pathname + (from.search ?? '') : '/'}
+        state={from?.state ?? undefined}
+        replace
+      />
+    );
+  }
+
   return children;
 });
 

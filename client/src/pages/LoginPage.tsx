@@ -59,6 +59,9 @@ const LoginPage = memo(function LoginPage() {
         }),
       );
 
+      // GuestRoute handles the redirect-after-login (reads state.from and
+      // navigates there, including the original navigation state). We just
+      // trigger a re-render by navigating away — GuestRoute takes it from here.
       navigate('/', { replace: true });
     } catch (err: any) {
       setServerError(err.response?.data?.error || 'Неверный email или пароль');

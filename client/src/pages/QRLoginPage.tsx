@@ -169,6 +169,7 @@ const QRDisplayPanel = memo(function QRDisplayPanel({ onClose }: { onClose: () =
               }),
             );
             setStatus("approved");
+            // GuestRoute handles the redirect to the original page (state.from).
             setTimeout(() => navigate("/", { replace: true }), 800);
           } else if (statusData.status === "expired" || statusData.status === "consumed") {
             stopPolling();
