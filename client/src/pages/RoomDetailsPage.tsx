@@ -231,40 +231,47 @@ export default function RoomDetailsPage() {
         {/* Image Gallery */}
         <div className="mt-8 mb-10">
           {mainImage ? (
-            <div className="grid grid-cols-5 gap-2">
-              {/* Main image - large */}
-              <div className="col-span-3 row-span-2">
+            <>
+              {/* Mobile: single full-width image */}
+              <div className="lg:hidden">
                 <img
                   src={resolveImageUrl(mainImage.imageUrl)}
                   alt={room.title}
-                  className="w-full h-80 object-cover rounded-lg shadow-lg"
+                  className="w-full h-64 object-cover rounded-xl shadow-lg"
                 />
               </div>
 
-              {/* Other images */}
-              {otherImages.slice(0, 4).map((img, idx) => (
-                <div key={img.imageId} className={idx === 3 ? 'col-span-2' : ''}>
+              {/* Desktop: main image + thumbnails grid */}
+              <div className="hidden lg:grid grid-cols-5 gap-2">
+                <div className="col-span-3 row-span-2">
                   <img
-                    src={resolveImageUrl(img.imageUrl)}
-                    alt={`${room.title} ${idx + 2}`}
-                    className="w-full h-36 object-cover rounded-lg shadow-md"
+                    src={resolveImageUrl(mainImage.imageUrl)}
+                    alt={room.title}
+                    className="w-full h-80 object-cover rounded-lg shadow-lg"
                   />
                 </div>
-              ))}
-
-              {/* No extra placeholder — if there are fewer than 4 side images the
-                  grid simply leaves the unused columns empty. */}
-            </div>
+                {otherImages.slice(0, 4).map((img, idx) => (
+                  <div key={img.imageId} className={idx === 3 ? 'col-span-2' : ''}>
+                    <img
+                      src={resolveImageUrl(img.imageUrl)}
+                      alt={`${room.title} ${idx + 2}`}
+                      className="w-full h-36 object-cover rounded-lg shadow-md"
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
-            <div className="w-full h-80 bg-ui rounded-lg shadow-lg flex items-center justify-center">
+            <div className="w-full h-64 lg:h-80 bg-ui rounded-xl shadow-lg flex items-center justify-center">
               <span className="text-text/50">Изображение недоступно</span>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-8">
-          {/* Left column: Room info (2/3) */}
-          <div className="col-span-2 space-y-6">
+        {/* Responsive grid: single column on mobile, 3-col on desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          {/* Left column: Room info — full width on mobile, 2/3 on desktop */}
+          <div className="lg:col-span-2 order-2 lg:order-1 space-y-6">
             {/* Room info card */}
             <div className="bg-white p-8 rounded-xl shadow-lg border border-ui">
               {/* Title and badges */}
@@ -282,7 +289,7 @@ export default function RoomDetailsPage() {
 
               {/* Price */}
               <div className="mb-6 pb-6 border-b border-ui">
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-baseline gap-3 flex-wrap">
                   <span className="text-sm text-text/50 uppercase tracking-wider">Цена за ночь</span>
                   <span className="text-3xl font-bold text-primary">{room.basePrice} {CURRENCY_SYMBOL}</span>
                 </div>
@@ -336,7 +343,7 @@ export default function RoomDetailsPage() {
               {room.roomServices && room.roomServices.length > 0 && (
                 <>
                   <h2 className="text-lg font-bold text-text mb-4">Услуги и удобства</h2>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {room.roomServices.map((entry) => {
                       const service = entry.service;
                       // Badge variant per state: INCLUDED = success, OPTIONAL_ON = info, OPTIONAL_OFF = default
@@ -382,8 +389,8 @@ export default function RoomDetailsPage() {
             </div>
           </div>
 
-          {/* Right column: Actions (1/3 sticky) */}
-          <div className="col-span-1">
+          {/* Right column: booking / admin — full width on mobile (shows first), 1/3 on desktop */}
+          <div className="lg:col-span-1 order-1 lg:order-2">
             <div className="sticky top-4 space-y-4">
               {isAdmin ? (
                 // Admin controls
@@ -422,21 +429,27 @@ export default function RoomDetailsPage() {
                   </h3>
 
                   <div className="space-y-3">
-                    <Input
-                      type="date"
-                      label="Заезд"
-                      value={dates.checkIn}
-                      onChange={(e) => setDates((p) => ({ ...p, checkIn: e.target.value }))}
-                      min={new Date().toISOString().split('T')[0]}
-                    />
-
-                    <Input
-                      type="date"
-                      label="Выезд"
-                      value={dates.checkOut}
-                      onChange={(e) => setDates((p) => ({ ...p, checkOut: e.target.value }))}
-                      min={dates.checkIn || new Date().toISOString().split('T')[0]}
-                    />
+                    {/* Dates — side-by-side on all screen sizes */}
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <Input
+                          type="date"
+                          label="Заезд"
+                          value={dates.checkIn}
+                          onChange={(e) => setDates((p) => ({ ...p, checkIn: e.target.value }))}
+                          min={new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Input
+                          type="date"
+                          label="Выезд"
+                          value={dates.checkOut}
+                          onChange={(e) => setDates((p) => ({ ...p, checkOut: e.target.value }))}
+                          min={dates.checkIn || new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                    </div>
 
                     <Button
                       variant="primary"
