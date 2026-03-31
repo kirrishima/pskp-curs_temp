@@ -472,6 +472,9 @@ const RoomSearchPage = memo(function RoomSearchPage() {
   // Sentinel for IntersectionObserver
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // Mobile filter panel visibility
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   // Modals
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; room?: Room }>({
     isOpen: false,
@@ -666,42 +669,45 @@ const RoomSearchPage = memo(function RoomSearchPage() {
       {/* ── Top Search Bar ──────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col md:flex-row gap-3 items-end">
-            {/* Check-in */}
-            <div className="flex-1 min-w-0">
-              <label className={labelClass}>
-                <Calendar size={12} className="inline mr-1" />
-                Дата заезда
-              </label>
-              <input
-                type="date"
-                value={topCheckIn}
-                min={getTodayDate()}
-                onChange={(e) => {
-                  setTopCheckIn(e.target.value);
-                  if (e.target.value >= topCheckOut) {
-                    const next = new Date(e.target.value);
-                    next.setDate(next.getDate() + 1);
-                    setTopCheckOut(next.toISOString().split('T')[0]);
-                  }
-                }}
-                className={inputClass}
-              />
-            </div>
+          <div className="flex flex-col md:flex-row gap-3 md:items-end">
+            {/* Dates — side-by-side on mobile, flat flex items on desktop */}
+            <div className="flex gap-2 md:contents">
+              {/* Check-in */}
+              <div className="flex-1 min-w-0">
+                <label className={labelClass}>
+                  <Calendar size={12} className="inline mr-1" />
+                  Заезд
+                </label>
+                <input
+                  type="date"
+                  value={topCheckIn}
+                  min={getTodayDate()}
+                  onChange={(e) => {
+                    setTopCheckIn(e.target.value);
+                    if (e.target.value >= topCheckOut) {
+                      const next = new Date(e.target.value);
+                      next.setDate(next.getDate() + 1);
+                      setTopCheckOut(next.toISOString().split('T')[0]);
+                    }
+                  }}
+                  className={inputClass}
+                />
+              </div>
 
-            {/* Check-out */}
-            <div className="flex-1 min-w-0">
-              <label className={labelClass}>
-                <Calendar size={12} className="inline mr-1" />
-                Дата выезда
-              </label>
-              <input
-                type="date"
-                value={topCheckOut}
-                min={topCheckIn}
-                onChange={(e) => setTopCheckOut(e.target.value)}
-                className={inputClass}
-              />
+              {/* Check-out */}
+              <div className="flex-1 min-w-0">
+                <label className={labelClass}>
+                  <Calendar size={12} className="inline mr-1" />
+                  Выезд
+                </label>
+                <input
+                  type="date"
+                  value={topCheckOut}
+                  min={topCheckIn}
+                  onChange={(e) => setTopCheckOut(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
             </div>
 
             {/* Guests */}
@@ -724,27 +730,38 @@ const RoomSearchPage = memo(function RoomSearchPage() {
             </div>
 
             {/* Search */}
-            <div>
-              <Button
-                variant="primary"
-                size="md"
-                icon={<Search size={18} />}
-                onClick={handleTopSearch}
-                isLoading={isLoading}
-                className="whitespace-nowrap"
-              >
-                Найти
-              </Button>
-            </div>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Search size={18} />}
+              onClick={handleTopSearch}
+              isLoading={isLoading}
+              className="w-full md:w-auto whitespace-nowrap"
+            >
+              Найти
+            </Button>
           </div>
         </div>
       </div>
 
       {/* ── Main Content ────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Mobile filter toggle — hidden on lg+ */}
+        <div className="lg:hidden mb-4">
+          <Button
+            variant={filtersOpen ? 'primary' : 'secondary'}
+            size="sm"
+            icon={<SlidersHorizontal size={16} />}
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="w-full"
+          >
+            {filtersOpen ? 'Скрыть фильтры' : 'Фильтры'}
+          </Button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
+          {/* Sidebar — always visible on lg+, toggleable on mobile */}
+          <div className={`lg:col-span-1 ${filtersOpen ? 'block' : 'hidden'} lg:block`}>
             <FilterPanel
               filters={filters}
               onFiltersChange={setFilters}

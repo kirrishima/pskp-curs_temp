@@ -84,42 +84,45 @@ const SearchForm = memo(function SearchForm() {
   return (
     <div className="bg-white border-b border-gray-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex flex-col md:flex-row gap-3 items-end">
-          {/* Check-in */}
-          <div className="flex-1 min-w-0">
-            <label className={labelClass}>
-              <Calendar size={12} className="inline mr-1" />
-              Дата заезда
-            </label>
-            <input
-              type="date"
-              value={checkIn}
-              min={getTodayDate()}
-              onChange={(e) => {
-                setCheckIn(e.target.value);
-                if (e.target.value >= checkOut) {
-                  const next = new Date(e.target.value);
-                  next.setDate(next.getDate() + 1);
-                  setCheckOut(next.toISOString().split('T')[0]);
-                }
-              }}
-              className={inputClass}
-            />
-          </div>
+        <div className="flex flex-col md:flex-row gap-3 md:items-end">
+          {/* Dates — side-by-side on mobile, flat flex items on desktop */}
+          <div className="flex gap-2 md:contents">
+            {/* Check-in */}
+            <div className="flex-1 min-w-0">
+              <label className={labelClass}>
+                <Calendar size={12} className="inline mr-1" />
+                Заезд
+              </label>
+              <input
+                type="date"
+                value={checkIn}
+                min={getTodayDate()}
+                onChange={(e) => {
+                  setCheckIn(e.target.value);
+                  if (e.target.value >= checkOut) {
+                    const next = new Date(e.target.value);
+                    next.setDate(next.getDate() + 1);
+                    setCheckOut(next.toISOString().split('T')[0]);
+                  }
+                }}
+                className={inputClass}
+              />
+            </div>
 
-          {/* Check-out */}
-          <div className="flex-1 min-w-0">
-            <label className={labelClass}>
-              <Calendar size={12} className="inline mr-1" />
-              Дата выезда
-            </label>
-            <input
-              type="date"
-              value={checkOut}
-              min={checkIn}
-              onChange={(e) => setCheckOut(e.target.value)}
-              className={inputClass}
-            />
+            {/* Check-out */}
+            <div className="flex-1 min-w-0">
+              <label className={labelClass}>
+                <Calendar size={12} className="inline mr-1" />
+                Выезд
+              </label>
+              <input
+                type="date"
+                value={checkOut}
+                min={checkIn}
+                onChange={(e) => setCheckOut(e.target.value)}
+                className={inputClass}
+              />
+            </div>
           </div>
 
           {/* Guests */}
@@ -142,17 +145,15 @@ const SearchForm = memo(function SearchForm() {
           </div>
 
           {/* Search Button */}
-          <div>
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Search size={18} />}
-              onClick={handleSearch}
-              className="whitespace-nowrap"
-            >
-              Найти
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Search size={18} />}
+            onClick={handleSearch}
+            className="w-full md:w-auto whitespace-nowrap"
+          >
+            Найти
+          </Button>
         </div>
       </div>
     </div>
