@@ -134,8 +134,8 @@ model RefreshToken {
 model QRCode {
   id        String   @id @default(uuid()) @db.Uuid
   code      String   @unique
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?  @db.Uuid
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   consumed  Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())

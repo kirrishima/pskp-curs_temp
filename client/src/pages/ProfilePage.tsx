@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Phone, Calendar, Globe, Shield, Save, User as UserIcon, QrCode } from 'lucide-react';
-import { QRGenerateModal } from '@/pages/QRLoginPage';
+import { QRApproveModal } from '@/pages/QRLoginPage';
 import api from '@/api/axiosInstance';
 import useAppSelector from '@/hooks/useAppSelector';
 import useAppDispatch from '@/hooks/useAppDispatch';
@@ -56,7 +56,7 @@ const ProfilePage = memo(function ProfilePage() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user) as User | null;
 
-  const [showQRGenerate, setShowQRGenerate] = useState(false);
+  const [showQRApprove, setShowQRApprove] = useState(false);
 
   // Editable form state
   const [displayName, setDisplayName] = useState('');
@@ -200,7 +200,7 @@ const ProfilePage = memo(function ProfilePage() {
 
   return (
     <>
-    {showQRGenerate && <QRGenerateModal onClose={() => setShowQRGenerate(false)} />}
+    {showQRApprove && <QRApproveModal onClose={() => setShowQRApprove(false)} />}
     <div className="max-w-2xl mx-auto px-4 py-8">
       {/* ── Header card ──────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-6">
@@ -378,11 +378,11 @@ const ProfilePage = memo(function ProfilePage() {
           <QrCode size={20} className="text-primary" />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-medium text-text">Вход по QR-коду</p>
-          <p className="text-xs text-text/50 mt-0.5">Войдите на другом устройстве без пароля</p>
+          <p className="text-sm font-medium text-text">Одобрить вход по QR</p>
+          <p className="text-xs text-text/50 mt-0.5">Отсканируйте QR-код с экрана компьютера</p>
         </div>
-        <Button variant="secondary" onClick={() => setShowQRGenerate(true)}>
-          Показать код
+        <Button variant="secondary" onClick={() => setShowQRApprove(true)}>
+          Сканировать
         </Button>
       </div>
 

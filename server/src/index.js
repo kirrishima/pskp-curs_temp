@@ -83,8 +83,8 @@ scheduleHoldExpiryProcessing();
 // Try HTTPS first, fall back to HTTP if certs are missing
 let server;
 
-const certKeyPath = './client/cer/moonglow.key';
-const certCrtPath = './client/cer/moonglow.crt';
+const certKeyPath = '../client/cer/moonglow.key';
+const certCrtPath = '../client/cer/moonglow.crt';
 
 if (fs.existsSync(certKeyPath) && fs.existsSync(certCrtPath)) {
   const httpsOptions = {

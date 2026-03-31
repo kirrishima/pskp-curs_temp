@@ -7,7 +7,7 @@ import { loginSuccess } from '@/store/slices/authSlice';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { validateEmail } from '@/utils/validation';
-import { QRScanModal } from '@/pages/QRLoginPage';
+import { QRDisplayModal } from '@/pages/QRLoginPage';
 
 type FieldErrors = Record<string, string>;
 
@@ -20,7 +20,7 @@ const LoginPage = memo(function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
-  const [showQRScan, setShowQRScan] = useState(false);
+  const [showQRDisplay, setShowQRDisplay] = useState(false);
 
   // Per-field errors & touched state
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -76,7 +76,7 @@ const LoginPage = memo(function LoginPage() {
 
   return (
     <>
-    {showQRScan && <QRScanModal onClose={() => setShowQRScan(false)} />}
+    {showQRDisplay && <QRDisplayModal onClose={() => setShowQRDisplay(false)} />}
     <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] px-4">
       <div className="w-full max-w-md" onKeyDown={onKeyDown}>
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
@@ -146,7 +146,7 @@ const LoginPage = memo(function LoginPage() {
 
             <Button
               variant="secondary"
-              onClick={() => setShowQRScan(true)}
+              onClick={() => setShowQRDisplay(true)}
               icon={<QrCode size={18} />}
               className="w-full"
             >

@@ -1,52 +1,66 @@
 const { Router } = require("express");
 const { createLogger } = require("../logger");
-const { generateQRCode, consumeQRCode } = require("../services/qr");
+const { generateQRSession, approveQRCode, checkQRStatus } = require("../services/qr");
 const { authenticate } = require("../middleware/auth");
 
 const logger = createLogger("QR");
 const router = Router();
 
-// ── Generate QR code (requires authentication) ─────────────────────
-router.post("/generate", authenticate, async (req, res) => {
+// ── Generate QR session (NO auth — called by PC that wants to log in) ────
+router.post("/generate", async (req, res) => {
   try {
-    const result = await generateQRCode(req.user.id);
+    const result = await generateQRSession();
 
-    logger.info("QR code generated", { userId: req.user.id, expiresAt: result.expiresAt });
+    logger.info("QR session created", { code: result.code, expiresAt: result.expiresAt });
 
     res.json({
       code: result.code,
       expiresAt: result.expiresAt,
     });
   } catch (err) {
-    logger.error("QR code generation failed", { error: err.message, stack: err.stack });
-    res.status(500).json({ error: "QR code generation failed" });
+    logger.error("QR session creation failed", { error: err.message, stack: err.stack });
+    res.status(500).json({ error: "Не удалось создать QR-сессию" });
   }
 });
 
-// ── Consume QR code (login from another device — no auth needed) ───
-router.post("/consume", async (req, res) => {
+// ── Approve QR code (requires auth — called by phone) ────────────────────
+router.post("/approve", authenticate, async (req, res) => {
   try {
-    console.log("hello???");
     const { code } = req.body;
-    logger.info(code);
-    console.log(code);
     if (!code) {
-      return res.status(400).json({ error: "QR code is required" });
+      return res.status(400).json({ error: "QR-код обязателен" });
     }
 
-    const result = await consumeQRCode(code);
+    await approveQRCode(code, req.user.id);
 
-    logger.info("QR code consumed", { userId: result.user.id });
+    logger.info("QR code approved", { userId: req.user.id, code });
 
-    const { password, tokenVersion, ...safeUser } = result.user;
-    res.json({
-      user: safeUser,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-    });
+    res.json({ success: true });
   } catch (err) {
-    logger.warn("QR login failed", { error: err.message });
-    res.status(401).json({ error: err.message || "QR login failed" });
+    logger.warn("QR approval failed", { error: err.message });
+    res.status(400).json({ error: err.message || "Не удалось одобрить QR-код" });
+  }
+});
+
+// ── Check QR status (NO auth — polled by PC) ─────────────────────────────
+router.get("/status/:code", async (req, res) => {
+  try {
+    const result = await checkQRStatus(req.params.code);
+
+    if (result.status === "approved") {
+      const { password, tokenVersion, ...safeUser } = result.user;
+      return res.json({
+        status: "approved",
+        user: safeUser,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      });
+    }
+
+    res.json({ status: result.status });
+  } catch (err) {
+    logger.warn("QR status check failed", { error: err.message });
+    res.status(400).json({ error: err.message || "Ошибка проверки QR-кода" });
   }
 });
 
