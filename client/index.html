@@ -11,6 +11,11 @@
     />
     <script>
       tailwind.config = {
+        future: {
+          // Wrap all hover: variants in @media (hover: hover) and (pointer: fine)
+          // so hover styles never "stick" on touch devices after a tap.
+          hoverOnlyWhenSupported: true,
+        },
         theme: {
           extend: {
             colors: {
