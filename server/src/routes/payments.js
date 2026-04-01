@@ -61,6 +61,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
 
   let booking = null;
   let hold = null;
+  let paymentIntent = null; // tracked so rollback can cancel it if payment.create() fails
 
   try {
     const stripe = getStripe();
@@ -96,6 +97,9 @@ router.post('/create-intent', authenticate, async (req, res) => {
       const now = new Date();
       const holdExpired = overlap.hold && overlap.hold.expiresAt <= now;
       const isPending = overlap.status === 'PENDING';
+      const exactDateMatch =
+        overlap.startDate.getTime() === startDate.getTime() &&
+        overlap.endDate.getTime() === endDate.getTime();
 
       // ─── Case 1: Any PENDING booking whose hold has expired — stale, clean up ──
       if (isPending && holdExpired) {
@@ -133,61 +137,97 @@ router.post('/create-intent', authenticate, async (req, res) => {
         // Fall through to create a new booking
       }
 
-      // ─── Case 2: User's own PENDING booking, hold still active — resume ──
-      else if (
-        overlap.userId === userId &&
-        isPending &&
-        overlap.payment?.status === 'PENDING' &&
-        !holdExpired
-      ) {
-        const pi = await stripe.paymentIntents.retrieve(overlap.payment.stripePaymentIntentId);
+      // ─── Case 2: User's own PENDING booking with EXACT same dates, hold still active ──
+      // Handles all payment states: recoverable PI, terminal PI, missing payment.
+      // Exact date match is required — if the user changed dates we fall through to Case 3.
+      else if (overlap.userId === userId && isPending && !holdExpired && exactDateMatch) {
+        const resumeNights = Math.ceil(
+          (overlap.endDate.getTime() - overlap.startDate.getTime()) / (24 * 60 * 60 * 1000),
+        );
+
         const recoverableStatuses = [
           'requires_payment_method',
           'requires_confirmation',
           'requires_action',
         ];
 
-        if (recoverableStatuses.includes(pi.status)) {
-          const resumeNights = Math.ceil(
-            (overlap.endDate.getTime() - overlap.startDate.getTime()) / (24 * 60 * 60 * 1000),
-          );
-          logger.info('Resuming existing PENDING booking for user', {
+        // Sub-case 2a: payment record exists in DB
+        if (overlap.payment?.status === 'PENDING') {
+          const pi = await stripe.paymentIntents.retrieve(overlap.payment.stripePaymentIntentId);
+
+          if (recoverableStatuses.includes(pi.status)) {
+            // Happy path: payment can still be completed — hand back the client secret
+            logger.info('Resuming existing PENDING booking (recoverable PI)', {
+              bookingId: overlap.bookingId,
+              userId,
+            });
+            return res.status(200).json({
+              bookingId: overlap.bookingId,
+              holdId: overlap.holdId,
+              paymentId: overlap.payment.id,
+              clientSecret: pi.client_secret,
+              totalAmount: Number(overlap.totalAmount),
+              currency: overlap.payment.currency,
+              nights: resumeNights,
+              expiresAt: overlap.hold.expiresAt,
+              resumed: true,
+            });
+          }
+
+          // PI reached a terminal state (succeeded/cancelled/failed) — cancel the
+          // stale payment record in DB and create a fresh PI below.
+          logger.info('PI in terminal state, issuing fresh PI for existing booking', {
             bookingId: overlap.bookingId,
-            userId,
+            piStatus: pi.status,
           });
-          return res.status(200).json({
-            bookingId: overlap.bookingId,
-            holdId: overlap.holdId,
-            paymentId: overlap.payment.id,
-            clientSecret: pi.client_secret,
-            totalAmount: Number(overlap.totalAmount),
-            currency: overlap.payment.currency,
-            nights: resumeNights,
-            expiresAt: overlap.hold.expiresAt,
-            resumed: true,
+          try { await stripe.paymentIntents.cancel(overlap.payment.stripePaymentIntentId); } catch {}
+          await prisma.payment.update({
+            where: { id: overlap.payment.id },
+            data: { status: 'CANCELLED' },
           });
         }
 
-        // PI is in a terminal state — cancel stale records and re-create
-        logger.info('Cancelling stale booking with terminal PI, allowing re-creation', {
+        // Sub-case 2b: payment record is missing, failed, or was just cancelled above.
+        // Create a fresh Stripe PI (and payment record) for the existing booking + hold
+        // instead of cancelling everything and starting from scratch.
+        logger.info('Creating fresh PI for existing booking (no valid payment found)', {
           bookingId: overlap.bookingId,
-          piStatus: pi.status,
+          userId,
         });
-        await prisma.$transaction([
-          prisma.booking.update({
-            where: { bookingId: overlap.bookingId },
-            data: { status: 'CANCELLED' },
-          }),
-          prisma.roomHold.update({
-            where: { holdId: overlap.holdId },
-            data: { status: 'CANCELLED' },
-          }),
-          prisma.payment.update({
-            where: { id: overlap.payment.id },
-            data: { status: 'CANCELLED' },
-          }),
-        ]);
-        // Fall through to create a new booking
+
+        const freshAmount = Math.round(Number(overlap.totalAmount) * 100);
+        const freshPI = await stripe.paymentIntents.create({
+          amount: freshAmount,
+          currency: currency.toLowerCase(),
+          metadata: {
+            bookingId: overlap.bookingId,
+            holdId: overlap.holdId,
+            roomNo,
+            userId,
+          },
+        });
+
+        const freshPayment = await prisma.payment.create({
+          data: {
+            stripePaymentIntentId: freshPI.id,
+            amount: Number(overlap.totalAmount),
+            currency: currency.toLowerCase(),
+            status: 'PENDING',
+            bookingId: overlap.bookingId,
+          },
+        });
+
+        return res.status(200).json({
+          bookingId: overlap.bookingId,
+          holdId: overlap.holdId,
+          paymentId: freshPayment.id,
+          clientSecret: freshPI.client_secret,
+          totalAmount: Number(overlap.totalAmount),
+          currency: currency.toLowerCase(),
+          nights: resumeNights,
+          expiresAt: overlap.hold.expiresAt,
+          resumed: true,
+        });
       }
 
       // ─── Case 3: Genuine conflict (confirmed booking, or another user's active hold) ──
@@ -327,7 +367,7 @@ router.post('/create-intent', authenticate, async (req, res) => {
     // Stripe amount is in smallest currency unit (cents for USD)
     const stripeAmount = Math.round(totalAmount * 100);
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    paymentIntent = await stripe.paymentIntents.create({
       amount: stripeAmount,
       currency: currency.toLowerCase(),
       metadata: {
@@ -367,8 +407,22 @@ router.post('/create-intent', authenticate, async (req, res) => {
       services: bookingServicesData,
     });
   } catch (err) {
-    // Rollback: if booking was created but Stripe failed, cancel everything
+    // Rollback: if booking/hold was created but Stripe PI creation or payment.create() failed,
+    // cancel all DB records AND the orphaned Stripe PI (if it was already created).
     if (booking) {
+      // Cancel the orphaned PI in Stripe so it doesn't linger
+      if (paymentIntent) {
+        try {
+          const stripe = getStripe();
+          await stripe.paymentIntents.cancel(paymentIntent.id);
+        } catch (stripeErr) {
+          logger.warn('Could not cancel orphaned Stripe PI during rollback', {
+            piId: paymentIntent.id,
+            error: stripeErr.message,
+          });
+        }
+      }
+
       try {
         await prisma.$transaction([
           prisma.bookingService.deleteMany({ where: { bookingId: booking.bookingId } }),
@@ -385,7 +439,10 @@ router.post('/create-intent', authenticate, async (req, res) => {
           bookingId: booking.bookingId,
         });
       } catch (rollbackErr) {
-        logger.error('Rollback failed', { error: rollbackErr.message });
+        logger.error('Rollback failed — booking may be stuck PENDING', {
+          bookingId: booking.bookingId,
+          error: rollbackErr.message,
+        });
       }
     }
 
