@@ -94,6 +94,10 @@ async function rotateRefreshToken(token) {
     throw new Error('Token revoked (version mismatch)');
   }
 
+  if (user.isBlocked) {
+    throw new Error('Account is blocked');
+  }
+
   // Revoke old refresh token (rotation)
   await prisma.refreshToken.update({
     where: { id: stored.id },

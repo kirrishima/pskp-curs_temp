@@ -277,8 +277,35 @@ function UserDetailModal({ userId, currentAdminId, onClose, onUserUpdated }: Use
 
         {/* Content */}
         {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="animate-spin text-primary" size={28} />
+          /* ── Shimmer skeleton — mirrors the real content layout ── */
+          <div className="p-6 space-y-6 animate-pulse">
+            {/* Avatar + name row */}
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-gray-200 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-gray-200 rounded-full w-2/3" />
+                <div className="h-3 bg-gray-200 rounded-full w-1/2" />
+                <div className="flex gap-2 mt-1">
+                  <div className="h-5 bg-gray-200 rounded-full w-24" />
+                  <div className="h-5 bg-gray-200 rounded-full w-20" />
+                </div>
+              </div>
+            </div>
+            {/* Fields */}
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="w-4 h-4 bg-gray-200 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-2.5 bg-gray-200 rounded-full w-16" />
+                  <div className="h-3.5 bg-gray-200 rounded-full w-3/4" />
+                </div>
+              </div>
+            ))}
+            {/* Action buttons */}
+            <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+              <div className="h-9 bg-gray-200 rounded-xl w-36" />
+              <div className="h-9 bg-gray-200 rounded-xl w-24 ml-auto" />
+            </div>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center px-6">

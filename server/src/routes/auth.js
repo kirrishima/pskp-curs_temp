@@ -238,6 +238,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Неверный email или пароль' });
     }
 
+    if (user.isBlocked) {
+      logger.warn('Login attempt by blocked user', { userId: user.id });
+      return res.status(403).json({ error: 'Аккаунт заблокирован' });
+    }
+
     const accessToken = signAccessToken(user);
     const refreshToken = await signRefreshToken(user);
 
