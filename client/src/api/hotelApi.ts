@@ -1,5 +1,5 @@
 import api from './axiosInstance';
-import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination } from '@/types';
+import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination, AdminUser, UsersPagination } from '@/types';
 
 // ── Module-level promise cache ───────────────────────────────────────────────
 // Caches the promise itself (not just the resolved value) so that concurrent
@@ -369,5 +369,51 @@ export async function cancelBookingWithRefund(
   params: CancelBookingParams,
 ): Promise<CancelBookingResult> {
   const { data } = await api.post(`/bookings/${bookingId}/cancel`, params);
+  return data;
+}
+
+// ── Admin: User management ───────────────────────────────────────────────────
+
+export interface GetUsersParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: string;
+  status?: 'active' | 'blocked' | '';
+}
+
+export interface GetUsersResult {
+  users: AdminUser[];
+  pagination: UsersPagination;
+}
+
+export async function getUsers(params: GetUsersParams = {}, signal?: AbortSignal): Promise<GetUsersResult> {
+  const p: Record<string, string | number> = {};
+  if (params.page)   p.page  = params.page;
+  if (params.limit)  p.limit = params.limit;
+  if (params.search) p.search = params.search;
+  if (params.role)   p.role   = params.role;
+  if (params.status) p.status = params.status;
+  const { data } = await api.get('/users', { params: p, signal });
+  return data;
+}
+
+export async function getAdminUser(userId: string): Promise<{ user: AdminUser }> {
+  const { data } = await api.get(`/users/${userId}`);
+  return data;
+}
+
+export async function blockUser(userId: string): Promise<{ user: AdminUser }> {
+  const { data } = await api.patch(`/users/${userId}/block`);
+  return data;
+}
+
+export async function unblockUser(userId: string): Promise<{ user: AdminUser }> {
+  const { data } = await api.patch(`/users/${userId}/unblock`);
+  return data;
+}
+
+export async function changeUserRole(userId: string, roleName: string): Promise<{ user: AdminUser }> {
+  const { data } = await api.patch(`/users/${userId}/role`, { roleName });
   return data;
 }

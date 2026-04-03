@@ -20,6 +20,7 @@ import CheckoutPage from '@/pages/CheckoutPage';
 import BookingsPage from '@/pages/BookingsPage';
 import AllBookingsPage from '@/pages/AllBookingsPage';
 import BookingDetailPage from '@/pages/BookingDetailPage';
+import AdminUsersPage from '@/pages/AdminUsersPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
 
@@ -102,8 +103,18 @@ const UserMenu = memo(function UserMenu() {
       // Ignore — clear locally
     }
     dispatch(logout());
-    navigate('/', { replace: true });
-  }, [dispatch, navigate, refreshToken]);
+
+    // Public routes are accessible without authentication — no redirect needed.
+    // Only redirect to home when the current page requires the user to be logged in.
+    const PUBLIC_PATHS = ['/', '/rooms'];
+    const isPublic =
+      PUBLIC_PATHS.includes(location.pathname) ||
+      location.pathname.startsWith('/rooms/');
+
+    if (!isPublic) {
+      navigate('/', { replace: true });
+    }
+  }, [dispatch, navigate, refreshToken, location.pathname]);
 
   if (!user) {
     return (
@@ -236,6 +247,9 @@ function AppContent() {
                 <Link to="/admin/services" className="text-sm text-text/60 hover:text-text transition-colors">
                   Услуги
                 </Link>
+                <Link to="/admin/users" className="text-sm text-text/60 hover:text-text transition-colors">
+                  Пользователи
+                </Link>
               </>
             )}
           </nav>
@@ -271,6 +285,7 @@ function AppContent() {
           <Route path="/admin/rooms/:roomNo" element={<AdminRoute><RoomEditorPage /></AdminRoute>} />
           <Route path="/admin/hotels" element={<AdminRoute><HotelsPage /></AdminRoute>} />
           <Route path="/admin/services" element={<AdminRoute><ServicesPage /></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

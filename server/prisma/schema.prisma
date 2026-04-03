@@ -83,6 +83,7 @@ model User {
   firstName     String
   lastName      String
   tokenVersion  Int       @default(0)
+  isBlocked     Boolean   @default(false) @map("is_blocked")
 
   phone         String?
   birthDate     DateTime?

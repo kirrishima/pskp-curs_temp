@@ -59,6 +59,9 @@ async function verifyAccessToken(token) {
   if (payload.tokenVersion !== user.tokenVersion) {
     throw new Error('Token revoked (version mismatch)');
   }
+  if (user.isBlocked) {
+    throw new Error('Account is blocked');
+  }
 
   return { payload, user };
 }

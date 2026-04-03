@@ -81,6 +81,12 @@ const steps = [
       END $$
     `,
   },
+
+  // ── 007: is_blocked column on User ───────────────────────────────────────
+  {
+    name: '007_user_is_blocked',
+    sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT FALSE`,
+  },
 ];
 
 async function runMigrations() {

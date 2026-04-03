@@ -21,8 +21,25 @@ export interface User {
   citizenship?: string | null;
   displayName?: string | null;
 
+  isBlocked?: boolean;
+
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Extended user type returned by /api/users (admin endpoints)
+export interface AdminUser extends User {
+  isBlocked: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { bookings: number };
+}
+
+export interface UsersPagination {
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
 }
 
 export interface AuthTokens {
