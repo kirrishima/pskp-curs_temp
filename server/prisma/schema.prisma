@@ -311,10 +311,16 @@ model Booking {
   payment         Payment?
   bookingServices BookingService[]
 
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
   @@index([userId])
   @@index([roomNo])
   @@index([status])
   @@index([roomNo, startDate, endDate])
+  @@index([createdAt])
+  @@index([status, updatedAt])
+  @@index([startDate])
+  @@index([endDate])
   @@map("bookings")
 }
 

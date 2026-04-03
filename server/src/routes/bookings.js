@@ -47,56 +47,151 @@ const router = Router();
 router.use(authenticate);
 
 // ── GET / — list bookings ────────────────────────────────────────────────────
+// Regular users → own bookings only.
+// Staff (admin/manager) → all bookings with pagination, filters, search.
 
 router.get('/', resolveRole, async (req, res) => {
   try {
     const isStaff = req.userRole === 'admin' || req.userRole === 'manager';
+    const isAdmin = req.userRole === 'admin';
 
-    // Staff can filter by any userId; guests see only their own.
-    const targetUserId =
-      isStaff && req.query.userId ? req.query.userId : req.user.id;
+    // ── Build WHERE clause ──────────────────────────────────────────────────
+    const where = {};
 
-    const statusFilter = req.query.status ? { status: req.query.status } : {};
+    if (!isStaff) {
+      // Regular user — own bookings only
+      where.userId = req.user.id;
+      if (req.query.status) where.status = req.query.status;
+    } else {
+      // Manager: active statuses + recently changed (7 days)
+      if (!isAdmin && !req.query.status) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        where.OR = [
+          { status: { in: ['CONFIRMED', 'CHECKED_IN', 'PENDING'] } },
+          {
+            status: { in: ['NO_SHOW', 'CHECKED_OUT', 'CANCELLED'] },
+            updatedAt: { gte: sevenDaysAgo },
+          },
+        ];
+      }
 
-    const bookings = await prisma.booking.findMany({
-      where: { userId: targetUserId, ...statusFilter },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: {
-        room: {
-          select: {
-            roomNo: true,
-            title: true,
-            floor: true,
-            basePrice: true,
-            images: { where: { isMain: true }, take: 1, select: { imageUrl: true } },
-            hotel: { select: { hotelCode: true, name: true, city: true } },
-          },
-        },
-        payment: {
-          select: {
-            id: true,
-            stripePaymentIntentId: true,
-            amount: true,
-            currency: true,
-            status: true,
-            stripeChargeId: true,
-            stripeRefundId: true,
-            stripeRefundStatus: true,
-            refundAmount: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        },
-        bookingServices: {
-          include: {
-            service: { select: { serviceCode: true, title: true, priceType: true } },
-          },
+      // Status filter
+      if (req.query.status) {
+        if (!isAdmin) {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const terminalStatuses = ['NO_SHOW', 'CHECKED_OUT', 'CANCELLED'];
+          if (terminalStatuses.includes(req.query.status)) {
+            delete where.OR;
+            where.status = req.query.status;
+            where.updatedAt = { gte: sevenDaysAgo };
+          } else {
+            delete where.OR;
+            where.status = req.query.status;
+          }
+        } else {
+          where.status = req.query.status;
+        }
+      }
+
+      // Date range filter
+      if (req.query.dateFrom) {
+        where.startDate = { ...(where.startDate || {}), gte: new Date(req.query.dateFrom) };
+      }
+      if (req.query.dateTo) {
+        where.endDate = { ...(where.endDate || {}), lte: new Date(req.query.dateTo) };
+      }
+
+      // Search by booking ID fragment (UUID string operations work in Prisma/PG)
+      if (req.query.search) {
+        where.bookingId = { contains: req.query.search.trim(), mode: 'insensitive' };
+      }
+    }
+
+    // ── Pagination ──────────────────────────────────────────────────────────
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+
+    // ── Sorting ─────────────────────────────────────────────────────────────
+    const allowedSortFields = ['createdAt', 'startDate', 'endDate', 'totalAmount', 'status'];
+    const sortBy = allowedSortFields.includes(req.query.sortBy) ? req.query.sortBy : 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
+
+    // ── Query ───────────────────────────────────────────────────────────────
+    const include = {
+      room: {
+        select: {
+          roomNo: true,
+          title: true,
+          floor: true,
+          basePrice: true,
+          images: { where: { isMain: true }, take: 1, select: { imageUrl: true } },
+          hotel: { select: { hotelCode: true, name: true, city: true } },
         },
       },
+      payment: {
+        select: {
+          id: true,
+          stripePaymentIntentId: true,
+          amount: true,
+          currency: true,
+          status: true,
+          stripeChargeId: true,
+          stripeRefundId: true,
+          stripeRefundStatus: true,
+          refundAmount: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      bookingServices: {
+        include: {
+          service: { select: { serviceCode: true, title: true, priceType: true } },
+        },
+      },
+    };
+
+    if (isStaff) {
+      include.hold = { select: { holdId: true, status: true, expiresAt: true, startDate: true, endDate: true } };
+      include.user = { select: { id: true, firstName: true, lastName: true, email: true, phone: true } };
+    }
+
+    const [bookings, totalCount] = await prisma.$transaction([
+      prisma.booking.findMany({
+        where,
+        orderBy: { [sortBy]: sortOrder },
+        skip,
+        take: limit,
+        include,
+      }),
+      prisma.booking.count({ where }),
+    ]);
+
+    // Strip sensitive payment fields for manager (not admin)
+    const serialized = bookings.map((b) => {
+      const sb = serializeBooking(b);
+      if (!isAdmin && isStaff && sb.payment) {
+        sb.payment = {
+          id: sb.payment.id,
+          amount: sb.payment.amount,
+          currency: sb.payment.currency,
+          status: sb.payment.status,
+          createdAt: sb.payment.createdAt,
+        };
+      }
+      if (!isAdmin) delete sb.hold;
+      return sb;
     });
 
-    res.json({ bookings: bookings.map(serializeBooking) });
+    res.json({
+      bookings: serialized,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    });
   } catch (err) {
     logger.error('Failed to list bookings', { error: err.message });
     res.status(500).json({ error: 'Failed to list bookings' });
@@ -109,25 +204,32 @@ router.get('/:bookingId', resolveRole, async (req, res) => {
   try {
     const { bookingId } = req.params;
     const isStaff = req.userRole === 'admin' || req.userRole === 'manager';
+    const isAdmin = req.userRole === 'admin';
+
+    const detailInclude = {
+      room: {
+        include: {
+          hotel: true,
+          images: true,
+          roomServices: { include: { service: true } },
+        },
+      },
+      payment: true,
+      bookingServices: {
+        include: {
+          service: { select: { serviceCode: true, title: true, priceType: true, icon: true, iconUrl: true } },
+        },
+      },
+      hold: { select: { holdId: true, status: true, expiresAt: true, startDate: true, endDate: true, createdAt: true } },
+    };
+
+    if (isStaff) {
+      detailInclude.user = { select: { id: true, firstName: true, lastName: true, email: true, phone: true } };
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { bookingId },
-      include: {
-        room: {
-          include: {
-            hotel: true,
-            images: true,
-            roomServices: { include: { service: true } },
-          },
-        },
-        payment: true,
-        bookingServices: {
-          include: {
-            service: { select: { serviceCode: true, title: true, priceType: true, icon: true, iconUrl: true } },
-          },
-        },
-        hold: { select: { holdId: true, status: true, expiresAt: true } },
-      },
+      include: detailInclude,
     });
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
@@ -135,7 +237,23 @@ router.get('/:bookingId', resolveRole, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    res.json({ booking: serializeBooking(booking) });
+    const sb = serializeBooking(booking);
+
+    // Manager: limited payment info, no hold details
+    if (isStaff && !isAdmin && sb.payment) {
+      sb.payment = {
+        id: sb.payment.id,
+        amount: sb.payment.amount,
+        currency: sb.payment.currency,
+        status: sb.payment.status,
+        createdAt: sb.payment.createdAt,
+        updatedAt: sb.payment.updatedAt,
+        refundAmount: sb.payment.refundAmount,
+      };
+    }
+    if (!isAdmin) delete sb.hold;
+
+    res.json({ booking: sb });
   } catch (err) {
     logger.error('Failed to get booking', { error: err.message });
     res.status(500).json({ error: 'Failed to get booking' });

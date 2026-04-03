@@ -24,6 +24,7 @@ const { getConfig } = require('../config');
 const prisma = require('../services/prisma');
 const { getStripe } = require('../services/stripe');
 const { authenticate } = require('../middleware/auth');
+const { resolveRole } = require('../middleware/authorize');
 const { serializeBooking } = require('../utils/serializers');
 
 const logger = createLogger('Payments');
@@ -40,7 +41,12 @@ router.get('/config', (_req, res) => {
 
 // ── Create PaymentIntent + Booking ──────────────────────────────────────────
 
-router.post('/create-intent', authenticate, async (req, res) => {
+router.post('/create-intent', authenticate, resolveRole, async (req, res) => {
+  // Only regular users (role=user) can create bookings
+  if (req.userRole === 'admin' || req.userRole === 'manager') {
+    return res.status(403).json({ error: 'Бронирование доступно только для клиентов' });
+  }
+
   const userId = req.user.id;
   const { roomNo, checkIn, checkOut, currency = 'usd', selectedServices, notes } = req.body;
 
