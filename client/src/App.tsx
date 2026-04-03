@@ -52,13 +52,18 @@ const GuestRoute = memo(function GuestRoute({ children }: { children: React.Reac
   const location = useLocation();
 
   if (user) {
-    // If we arrived here from a ProtectedRoute redirect, return to that page
-    // (including its navigation state, e.g. room + dates for /checkout).
+    // Return to the page the user was on before navigating to login.
+    // Guard against redirect loops: never send back to guest-only pages.
+    const GUEST_PATHS = ['/login', '/register'];
     const from = (location.state as { from?: any } | null)?.from;
+    const destination =
+      from && !GUEST_PATHS.includes(from.pathname)
+        ? from.pathname + (from.search ?? '')
+        : '/';
     return (
       <Navigate
-        to={from ? from.pathname + (from.search ?? '') : '/'}
-        state={from?.state ?? undefined}
+        to={destination}
+        state={from && !GUEST_PATHS.includes(from.pathname) ? (from.state ?? undefined) : undefined}
         replace
       />
     );
@@ -104,6 +109,7 @@ const UserMenu = memo(function UserMenu() {
     return (
       <Link
         to="/login"
+        state={{ from: location }}
         className="text-sm text-text/60 hover:text-text transition-colors font-medium"
       >
         Войти
