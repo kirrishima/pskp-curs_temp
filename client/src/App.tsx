@@ -18,6 +18,7 @@ import ServicesPage from '@/pages/ServicesPage';
 import HotelsPage from '@/pages/HotelsPage';
 import CheckoutPage from '@/pages/CheckoutPage';
 import BookingsPage from '@/pages/BookingsPage';
+import AllBookingsPage from '@/pages/AllBookingsPage';
 import BookingDetailPage from '@/pages/BookingDetailPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
@@ -34,6 +35,15 @@ const AdminRoute = memo(function AdminRoute({ children }: { children: React.Reac
   const location = useLocation();
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   if (user.role?.name !== 'admin') return <Navigate to="/" replace />;
+  return children;
+});
+
+/** Route guard: staff (admin/manager) required, redirects others. */
+const StaffRoute = memo(function StaffRoute({ children }: { children: React.ReactElement }) {
+  const user = useAppSelector((s) => s.auth.user);
+  const location = useLocation();
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (user.role?.name !== 'admin' && user.role?.name !== 'manager') return <Navigate to="/" replace />;
   return children;
 });
 
@@ -144,16 +154,29 @@ const UserMenu = memo(function UserMenu() {
               <UserIcon size={16} />
               Профиль
             </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate('/bookings');
-              }}
-              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-text/70 hover:bg-ui transition-colors sm:hidden"
-            >
-              <CalendarDays size={16} />
-              Мои бронирования
-            </button>
+            {user.role?.name === 'admin' || user.role?.name === 'manager' ? (
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate('/manage/bookings');
+                }}
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-text/70 hover:bg-ui transition-colors sm:hidden"
+              >
+                <CalendarDays size={16} />
+                Бронирования
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate('/bookings');
+                }}
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-text/70 hover:bg-ui transition-colors sm:hidden"
+              >
+                <CalendarDays size={16} />
+                Мои бронирования
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
@@ -173,6 +196,9 @@ const UserMenu = memo(function UserMenu() {
 function AppContent() {
   const user = useAppSelector((s) => s.auth.user);
   const isAdmin = user?.role?.name === 'admin';
+  const isManager = user?.role?.name === 'manager';
+  const isStaff = isAdmin || isManager;
+  const isRegularUser = user && !isStaff;
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -185,16 +211,18 @@ function AppContent() {
             <Link to="/rooms" className="text-sm text-text/60 hover:text-text transition-colors">
               Номера
             </Link>
-            {user && !isAdmin && (
+            {isRegularUser && (
               <Link to="/bookings" className="text-sm text-text/60 hover:text-text transition-colors">
                 Мои бронирования
               </Link>
             )}
+            {isStaff && (
+              <Link to="/manage/bookings" className="text-sm text-text/60 hover:text-text transition-colors">
+                Бронирования
+              </Link>
+            )}
             {isAdmin && (
               <>
-                <Link to="/bookings" className="text-sm text-text/60 hover:text-text transition-colors">
-                  Бронирования
-                </Link>
                 <Link to="/admin/hotels" className="text-sm text-text/60 hover:text-text transition-colors">
                   Отели
                 </Link>
@@ -226,6 +254,10 @@ function AppContent() {
           <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
           <Route path="/bookings/:bookingId" element={<ProtectedRoute><BookingDetailPage /></ProtectedRoute>} />
+
+          {/* Staff (admin/manager) */}
+          <Route path="/manage/bookings" element={<StaffRoute><AllBookingsPage /></StaffRoute>} />
+          <Route path="/manage/bookings/:bookingId" element={<StaffRoute><BookingDetailPage /></StaffRoute>} />
 
           {/* Admin */}
           <Route path="/admin/rooms/new" element={<AdminRoute><RoomEditorPage /></AdminRoute>} />

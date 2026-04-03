@@ -1,5 +1,5 @@
 import api from './axiosInstance';
-import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo } from '@/types';
+import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination } from '@/types';
 
 // ── Module-level promise cache ───────────────────────────────────────────────
 // Caches the promise itself (not just the resolved value) so that concurrent
@@ -317,6 +317,20 @@ export interface GetBookingsParams {
   status?: string;
   /** Admin/manager only: filter by a specific user's bookings. */
   userId?: string;
+  /** Page number (1-based). */
+  page?: number;
+  /** Items per page. */
+  limit?: number;
+  /** Search by booking ID fragment. */
+  search?: string;
+  /** Filter by check-in date from (ISO string). */
+  dateFrom?: string;
+  /** Filter by check-out date to (ISO string). */
+  dateTo?: string;
+  /** Sort field. */
+  sortBy?: string;
+  /** Sort direction. */
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface CancelBookingParams {
@@ -337,7 +351,7 @@ export interface CancelBookingResult {
 export async function getMyBookings(
   params?: GetBookingsParams,
   signal?: AbortSignal,
-): Promise<{ bookings: import('@/types').Booking[] }> {
+): Promise<{ bookings: import('@/types').Booking[]; pagination?: BookingsPagination }> {
   const { data } = await api.get('/bookings', { params, signal });
   return data;
 }

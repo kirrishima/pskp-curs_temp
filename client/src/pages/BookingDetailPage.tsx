@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   BedDouble,
@@ -13,6 +13,8 @@ import {
   CreditCard,
   ClipboardList,
   ShieldAlert,
+  User as UserIcon,
+  Clock,
 } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { getBookingById, cancelBookingWithRefund } from '@/api/hotelApi';
@@ -432,8 +434,13 @@ function CancelModal({ booking, isStaff, onClose, onSuccess }: CancelModalProps)
 export default function BookingDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
+  const loc = useLocation();
   const user = useAppSelector((s) => s.auth.user);
   const isStaff = user?.role?.name === 'admin' || user?.role?.name === 'manager';
+  const isAdmin = user?.role?.name === 'admin';
+
+  // Determine back link based on whether we came from /manage/bookings or /bookings
+  const isManageContext = loc.pathname.startsWith('/manage/');
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
@@ -495,7 +502,7 @@ export default function BookingDetailPage() {
         <p className="text-text/60">{error ?? 'Бронирование не найдено.'}</p>
         <button
           type="button"
-          onClick={() => navigate('/bookings')}
+          onClick={() => navigate(isManageContext ? '/manage/bookings' : '/bookings')}
           className="px-5 py-2 bg-primary text-white rounded-xl text-sm hover:bg-primary/90 transition-colors"
         >
           К списку бронирований
@@ -514,11 +521,11 @@ export default function BookingDetailPage() {
       {/* Back */}
       <button
         type="button"
-        onClick={() => navigate('/bookings')}
+        onClick={() => navigate(isManageContext ? '/manage/bookings' : '/bookings')}
         className="flex items-center gap-2 text-sm text-text/50 hover:text-text transition-colors w-fit"
       >
         <ArrowLeft size={16} />
-        Мои бронирования
+        {isManageContext ? 'Все бронирования' : 'Мои бронирования'}
       </button>
 
       {/* Header */}
@@ -606,6 +613,58 @@ export default function BookingDetailPage() {
           </div>
         )}
       </Section>
+
+      {/* Guest info (staff only) */}
+      {isStaff && booking.user && (
+        <Section title="Гость" icon={<UserIcon size={16} />}>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
+              <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Имя</dt>
+              <dd className="text-text font-medium">{booking.user.firstName} {booking.user.lastName}</dd>
+            </div>
+            <div>
+              <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Email</dt>
+              <dd className="text-text">{booking.user.email}</dd>
+            </div>
+            {booking.user.phone && (
+              <div>
+                <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Телефон</dt>
+                <dd className="text-text">{booking.user.phone}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">ID пользователя</dt>
+              <dd className="font-mono text-xs text-text/60">{booking.userId}</dd>
+            </div>
+          </dl>
+        </Section>
+      )}
+
+      {/* Hold info (admin only) */}
+      {isAdmin && booking.hold && (
+        <Section title="Hold (блокировка)" icon={<Clock size={16} />}>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
+              <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Hold ID</dt>
+              <dd className="font-mono text-xs text-text/60">{booking.hold.holdId}</dd>
+            </div>
+            <div>
+              <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Статус</dt>
+              <dd className="text-text font-medium">{booking.hold.status}</dd>
+            </div>
+            <div>
+              <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Истекает</dt>
+              <dd className="text-text">{formatDateTime(booking.hold.expiresAt)}</dd>
+            </div>
+            {booking.hold.createdAt && (
+              <div>
+                <dt className="text-text/40 text-xs uppercase tracking-wide mb-0.5">Создан</dt>
+                <dd className="text-text">{formatDateTime(booking.hold.createdAt)}</dd>
+              </div>
+            )}
+          </dl>
+        </Section>
+      )}
 
       {/* Services */}
       {booking.bookingServices && booking.bookingServices.length > 0 && (

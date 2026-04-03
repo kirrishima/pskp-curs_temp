@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { CalendarDays, ChevronRight, BedDouble, Loader2, AlertCircle, Receipt } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { getMyBookings } from '@/api/hotelApi';
@@ -177,6 +177,9 @@ export default function BookingsPage() {
   }, [load]);
 
   const filtered = bookings; // server-side filtering; kept as-is for local re-renders
+
+  // Staff should use /manage/bookings instead
+  if (isStaff) return <Navigate to="/manage/bookings" replace />;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">

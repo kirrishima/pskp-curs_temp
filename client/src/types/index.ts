@@ -158,9 +158,19 @@ export interface Booking {
   refundStatus: RefundStatus;
 
   room?: Room;
-  hold?: { holdId: string; status: string; expiresAt: string };
+  hold?: { holdId: string; status: string; expiresAt: string; startDate?: string; endDate?: string; createdAt?: string };
   payment?: Payment;
   bookingServices?: BookingServiceEntry[];
+
+  // Staff-only: guest info attached by the server
+  user?: { id: string; firstName: string; lastName: string; email: string; phone?: string | null };
+}
+
+export interface BookingsPagination {
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
 }
 
 export interface BookingServiceEntry {

@@ -49,6 +49,8 @@ export default function RoomDetailsPage() {
   const location = useLocation();
   const user = useAppSelector((s) => s.auth.user);
   const isAdmin = user?.role?.name === 'admin';
+  const isManager = user?.role?.name === 'manager';
+  const isStaff = isAdmin || isManager;
 
   // Dates can be pre-filled when coming from the search page.
   const locationState = location.state as { checkIn?: string; checkOut?: string } | null;
@@ -421,8 +423,15 @@ export default function RoomDetailsPage() {
                     </Button>
                   </div>
                 </div>
+              ) : isManager ? (
+                // Manager — no booking, just informational
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-ui">
+                  <p className="text-sm text-text/50 text-center">
+                    Бронирование доступно только клиентам.
+                  </p>
+                </div>
               ) : (
-                // User booking
+                // Regular user booking
                 <div className="bg-white p-6 rounded-xl shadow-lg border border-ui">
                   <h3 className="text-sm font-bold text-text uppercase tracking-wider mb-4">
                     Забронировать
