@@ -219,6 +219,46 @@ export interface Payment {
   refundAmount?: number | null;
 }
 
+// ─── Review ──────────────────────────────────────────────────────────────────
+
+export interface ReviewImage {
+  imageId:    string;
+  reviewId:   string;
+  imageUrl:   string;
+  uploadedAt: string;
+}
+
+export interface Review {
+  reviewId:   string;
+  bookingId:  string;
+  userId:     string;
+  roomNo:     string;
+  rating:     number;
+  text:       string | null;
+  authorName: string;
+  images:     ReviewImage[];
+  room?: {
+    roomNo:    string;
+    title:     string;
+    hotelCode: string;
+    hotel?:    { hotelCode: string; name: string };
+  };
+  createdAt:  string;
+  updatedAt:  string;
+}
+
+export interface ReviewsPagination {
+  page:       number;
+  limit:      number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export interface ReviewsStats {
+  averageRating: number | null;
+  totalReviews:  number;
+}
+
 // ─── Pagination ─────────────────────────────────────────────────────────────
 
 export interface PaginationInfo {

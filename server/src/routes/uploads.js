@@ -23,6 +23,7 @@ const { authorize } = require('../middleware/authorize');
 const { serializeService } = require('../utils/serializers');
 
 const logger = createLogger('Uploads');
+const { v4: uuidv4 } = require('uuid');
 const router = Router();
 
 // ── Base upload directory ────────────────────────────────────────────────────
@@ -67,6 +68,12 @@ function createUploadMiddleware(getDestination) {
 
 const roomUpload = createUploadMiddleware(
   (req) => path.join(UPLOAD_ROOT, 'rooms', req.params.roomNo)
+);
+
+// Review images: stored in uploads/reviews/{bookingId}/ and named by UUID
+// (UUID is pre-generated as req.reviewImageId before multer runs).
+const reviewUpload = createUploadMiddleware(
+  (req) => path.join(UPLOAD_ROOT, 'reviews', req.params.bookingId)
 );
 
 // Service icons are stored as flat files named after the serviceCode (primary key)
@@ -240,5 +247,110 @@ router.post(
     }
   }
 );
+
+// ── Upload review images ────────────────────────────────────────────────────
+// The file is saved with a random temp name by multer, then renamed to
+// {uuid}.ext so the DB record ID matches the filename.
+
+router.post(
+  '/reviews/:bookingId',
+  authenticate,
+  reviewUpload.array('images', 5),
+  async (req, res) => {
+    try {
+      const { bookingId } = req.params;
+
+      // Verify the booking belongs to the requesting user
+      const booking = await prisma.booking.findUnique({
+        where:   { bookingId },
+        include: { payment: true },
+      });
+
+      if (!booking) {
+        if (req.files) for (const f of req.files) fs.unlinkSync(f.path);
+        return res.status(404).json({ error: 'Booking not found' });
+      }
+
+      if (booking.userId !== req.user.id) {
+        if (req.files) for (const f of req.files) fs.unlinkSync(f.path);
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Verify the review exists for this booking
+      const review = await prisma.review.findUnique({ where: { bookingId } });
+      if (!review) {
+        if (req.files) for (const f of req.files) fs.unlinkSync(f.path);
+        return res.status(404).json({ error: 'Review not found — create the review before uploading images' });
+      }
+
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+
+      const createdImages = [];
+      const dir = path.join(UPLOAD_ROOT, 'reviews', bookingId);
+
+      for (const file of req.files) {
+        const imageId = uuidv4();
+        const ext     = path.extname(file.originalname).toLowerCase() || path.extname(file.filename) || '.jpg';
+        const newName = `${imageId}${ext}`;
+        const newPath = path.join(dir, newName);
+
+        // Rename from multer's temp name to the UUID-based name
+        fs.renameSync(file.path, newPath);
+
+        const imageUrl = `/uploads/reviews/${bookingId}/${newName}`;
+
+        const image = await prisma.reviewImage.create({
+          data: { imageId, reviewId: review.reviewId, imageUrl },
+        });
+
+        createdImages.push(image);
+      }
+
+      logger.info('Review images uploaded', { reviewId: review.reviewId, count: createdImages.length });
+      res.status(201).json({ images: createdImages });
+    } catch (err) {
+      logger.error('Failed to upload review images', { error: err.message });
+      res.status(500).json({ error: 'Failed to upload images' });
+    }
+  }
+);
+
+// ── Delete review image ─────────────────────────────────────────────────────
+
+router.delete('/reviews/:bookingId/:imageId', authenticate, async (req, res) => {
+  try {
+    const { bookingId, imageId } = req.params;
+    const isStaff = ['admin', 'manager'].includes(req.user.role?.name);
+
+    // Find the review for this booking
+    const review = await prisma.review.findUnique({ where: { bookingId } });
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    // Permission check: own review or staff
+    if (!isStaff && review.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const image = await prisma.reviewImage.findFirst({
+      where: { imageId, reviewId: review.reviewId },
+    });
+
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+
+    // Delete file from disk
+    const filePath = path.join(process.cwd(), image.imageUrl);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await prisma.reviewImage.delete({ where: { imageId } });
+
+    logger.info('Review image deleted', { reviewId: review.reviewId, imageId });
+    res.json({ message: 'Image deleted' });
+  } catch (err) {
+    logger.error('Failed to delete review image', { error: err.message });
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
 
 module.exports = router;

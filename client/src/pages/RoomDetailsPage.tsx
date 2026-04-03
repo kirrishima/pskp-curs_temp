@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Users,
@@ -8,6 +8,15 @@ import {
   DollarSign,
   Trash2,
   Edit2,
+  Star,
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 import useAppSelector from '@/hooks/useAppSelector';
@@ -18,11 +27,11 @@ import AlertModal from '@/components/modals/AlertModal';
 import Input from '@/components/ui/Input';
 import { API_BASE_URL } from '@/api/axiosInstance';
 
-import { getRoom, deleteRoom, checkRoomAvailability } from '@/api/hotelApi';
+import { getRoom, deleteRoom, checkRoomAvailability, getRoomReviews } from '@/api/hotelApi';
 import { getRoomServiceStateLabel } from '@/utils/roomServiceStates';
 import { getFeatureIcon } from '@/utils/featureIcons';
 import { CURRENCY_SYMBOL } from '@/utils/currency';
-import type { Room } from '@/types';
+import type { Room, Review, ReviewsPagination, ReviewsStats } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
 
@@ -32,6 +41,209 @@ function resolveImageUrl(url: string): string {
     return base + url;
   }
   return url;
+}
+
+// ─── Star display ────────────────────────────────────────────────────────────
+
+function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          size={size}
+          className={i <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 fill-gray-100'}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Review card ─────────────────────────────────────────────────────────────
+
+function ReviewCard({ review, onImageClick }: { review: Review; onImageClick: (url: string) => void }) {
+  const date = new Date(review.createdAt).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+
+  return (
+    <div className="p-5 border border-gray-100 rounded-2xl bg-white space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-text text-sm">{review.authorName}</p>
+          <p className="text-xs text-text/40 mt-0.5">{date}</p>
+        </div>
+        <Stars rating={review.rating} />
+      </div>
+      {review.text && (
+        <p className="text-sm text-text/70 leading-relaxed">{review.text}</p>
+      )}
+      {review.images.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {review.images.slice(0, 4).map((img) => (
+            <button
+              key={img.imageId}
+              type="button"
+              onClick={() => onImageClick(resolveImageUrl(img.imageUrl))}
+              className="w-16 h-16 rounded-lg overflow-hidden border border-gray-100 hover:opacity-90 transition-opacity"
+            >
+              <img
+                src={resolveImageUrl(img.imageUrl)}
+                alt="Фото отзыва"
+                className="w-full h-full object-cover"
+              />
+            </button>
+          ))}
+          {review.images.length > 4 && (
+            <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-text/50 font-medium border border-gray-100">
+              +{review.images.length - 4}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Room Reviews section ─────────────────────────────────────────────────────
+
+function RoomReviewsSection({ roomNo, hotelCode }: { roomNo: string; hotelCode: string }) {
+  const [reviews, setReviews]     = useState<Review[]>([]);
+  const [pagination, setPagination] = useState<ReviewsPagination | null>(null);
+  const [stats, setStats]         = useState<ReviewsStats | null>(null);
+  const [page, setPage]           = useState(1);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setLoading(true);
+    setError(null);
+    getRoomReviews(roomNo, { page, limit: 5 }, ac.signal)
+      .then((res) => {
+        if (ac.signal.aborted) return;
+        setReviews(res.reviews);
+        setPagination(res.pagination);
+        setStats(res.stats);
+      })
+      .catch((e) => { if (!ac.signal.aborted) setError('Не удалось загрузить отзывы'); })
+      .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    return () => ac.abort();
+  }, [roomNo, page]);
+
+  // Lightbox Escape
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [lightboxUrl]);
+
+  const totalReviews = stats?.totalReviews ?? 0;
+
+  return (
+    <div className="bg-white p-8 rounded-xl shadow-lg border border-ui mt-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold text-text">Отзывы</h2>
+          {stats && totalReviews > 0 && (
+            <div className="flex items-center gap-2">
+              <Stars rating={Math.round(stats.averageRating ?? 0)} size={16} />
+              <span className="text-sm font-semibold text-text">{stats.averageRating?.toFixed(1)}</span>
+              <span className="text-sm text-text/40">· {totalReviews} {
+                totalReviews === 1 ? 'отзыв' : totalReviews < 5 ? 'отзыва' : 'отзывов'
+              }</span>
+            </div>
+          )}
+        </div>
+        {totalReviews > 0 && (
+          <Link
+            to={`/hotels/${hotelCode}/reviews`}
+            className="text-sm text-primary hover:underline font-medium"
+          >
+            Все отзывы отеля →
+          </Link>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="animate-spin text-primary" size={24} />
+        </div>
+      ) : error ? (
+        <div className="flex items-center gap-2 text-sm text-text/50 py-6 justify-center">
+          <AlertCircle size={18} className="text-red-400" />
+          {error}
+        </div>
+      ) : reviews.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <MessageSquare size={32} className="text-gray-300" />
+          <p className="text-sm text-text/50">Отзывов пока нет</p>
+          <p className="text-xs text-text/30">Будьте первым, кто оставит отзыв после проживания</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            {reviews.map((r) => (
+              <ReviewCard key={r.reviewId} review={r} onImageClick={setLightboxUrl} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 text-sm">
+              <p className="text-text/40">
+                {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.totalCount)} из {pagination.totalCount}
+              </p>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setPage(1)} disabled={pagination.page === 1}
+                  className="p-1.5 rounded-lg hover:bg-ui disabled:opacity-30 transition-colors">
+                  <ChevronsLeft size={16} />
+                </button>
+                <button type="button" onClick={() => setPage(p => p - 1)} disabled={pagination.page === 1}
+                  className="p-1.5 rounded-lg hover:bg-ui disabled:opacity-30 transition-colors">
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="px-3 py-1 text-text/60">{pagination.page} / {pagination.totalPages}</span>
+                <button type="button" onClick={() => setPage(p => p + 1)} disabled={pagination.page === pagination.totalPages}
+                  className="p-1.5 rounded-lg hover:bg-ui disabled:opacity-30 transition-colors">
+                  <ChevronRight size={16} />
+                </button>
+                <button type="button" onClick={() => setPage(pagination.totalPages)} disabled={pagination.page === pagination.totalPages}
+                  className="p-1.5 rounded-lg hover:bg-ui disabled:opacity-30 transition-colors">
+                  <ChevronsRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Фото отзыва"
+            className="max-w-full max-h-[90vh] rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── State Management ───────────────────────────────────────────────────────

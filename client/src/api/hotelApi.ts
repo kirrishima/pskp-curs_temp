@@ -1,5 +1,5 @@
 import api from './axiosInstance';
-import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination, AdminUser, UsersPagination } from '@/types';
+import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination, AdminUser, UsersPagination, Review, ReviewsPagination, ReviewsStats } from '@/types';
 
 // ── Module-level promise cache ───────────────────────────────────────────────
 // Caches the promise itself (not just the resolved value) so that concurrent
@@ -416,4 +416,70 @@ export async function unblockUser(userId: string): Promise<{ user: AdminUser }> 
 export async function changeUserRole(userId: string, roleName: string): Promise<{ user: AdminUser }> {
   const { data } = await api.patch(`/users/${userId}/role`, { roleName });
   return data;
+}
+
+// ── Reviews ──────────────────────────────────────────────────────────────────
+
+export interface ReviewsResult {
+  reviews:    Review[];
+  pagination: ReviewsPagination;
+  stats:      ReviewsStats;
+}
+
+export async function getRoomReviews(
+  roomNo: string,
+  params: { page?: number; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<ReviewsResult> {
+  const { data } = await api.get(`/reviews/room/${encodeURIComponent(roomNo)}`, { params, signal });
+  return data;
+}
+
+export async function getHotelReviews(
+  hotelCode: string,
+  params: { page?: number; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<ReviewsResult> {
+  const { data } = await api.get(`/reviews/hotel/${encodeURIComponent(hotelCode)}`, { params, signal });
+  return data;
+}
+
+export async function getBookingReview(bookingId: string): Promise<{ review: Review }> {
+  const { data } = await api.get(`/reviews/booking/${bookingId}`);
+  return data;
+}
+
+export async function createReview(payload: {
+  bookingId: string;
+  rating: number;
+  text?: string;
+}): Promise<{ review: Review }> {
+  const { data } = await api.post('/reviews', payload);
+  return data;
+}
+
+export async function updateReview(
+  reviewId: string,
+  payload: { rating?: number; text?: string },
+): Promise<{ review: Review }> {
+  const { data } = await api.patch(`/reviews/${reviewId}`, payload);
+  return data;
+}
+
+export async function deleteReview(reviewId: string): Promise<void> {
+  await api.delete(`/reviews/${reviewId}`);
+}
+
+export async function uploadReviewImages(
+  bookingId: string,
+  formData: FormData,
+): Promise<{ images: { imageId: string; reviewId: string; imageUrl: string; uploadedAt: string }[] }> {
+  const { data } = await api.post(`/uploads/reviews/${bookingId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function deleteReviewImage(bookingId: string, imageId: string): Promise<void> {
+  await api.delete(`/uploads/reviews/${bookingId}/${imageId}`);
 }

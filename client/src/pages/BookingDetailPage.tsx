@@ -15,10 +15,12 @@ import {
   ShieldAlert,
   User as UserIcon,
   Clock,
+  Star,
 } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
-import { getBookingById, cancelBookingWithRefund } from '@/api/hotelApi';
-import type { Booking, BookingStatus, RefundStatus, CancellationSource } from '@/types';
+import { getBookingById, cancelBookingWithRefund, getBookingReview, createReview, updateReview, deleteReview, uploadReviewImages, deleteReviewImage } from '@/api/hotelApi';
+import { API_BASE_URL } from '@/api/axiosInstance';
+import type { Booking, BookingStatus, RefundStatus, CancellationSource, Review } from '@/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,13 @@ function getHoursUntilCheckIn(startDate: string): number {
   const checkIn = new Date(startDate);
   checkIn.setHours(14, 0, 0, 0);
   return (checkIn.getTime() - Date.now()) / (1000 * 60 * 60);
+}
+
+function resolveReviewImageUrl(url: string): string {
+  if (url.startsWith('/uploads/')) {
+    return API_BASE_URL.replace(/\/api\/?$/, '') + url;
+  }
+  return url;
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -187,6 +196,489 @@ function Section({ title, icon, children }: { title: string; icon: React.ReactNo
       </div>
       <div className="px-5 py-4">{children}</div>
     </section>
+  );
+}
+
+// ─── Review Section ───────────────────────────────────────────────────────────
+
+interface ReviewSectionProps {
+  bookingId: string;
+  isStaff: boolean;
+  userId?: string;
+  bookingUserId: string;
+  bookingStatus: BookingStatus;
+  paymentStatus?: string;
+}
+
+function ReviewSection({ bookingId, isStaff, userId, bookingUserId, bookingStatus, paymentStatus }: ReviewSectionProps) {
+  const [review, setReview] = useState<Review | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Form state
+  const [rating, setRating] = useState(5);
+  const [text, setText] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isCheckedOut = bookingStatus === 'CHECKED_OUT';
+  const isCancelledWithPayment = bookingStatus === 'CANCELLED' && paymentStatus === 'SUCCEEDED';
+  const canReview = !isStaff && (isCheckedOut || isCancelledWithPayment) && userId === bookingUserId;
+
+  // Load review on mount
+  useEffect(() => {
+    if (!canReview) return;
+    const loadReview = async () => {
+      try {
+        const data = await getBookingReview(bookingId);
+        setReview(data);
+      } catch (err) {
+        const is404 = err instanceof Error && err.message.includes('404');
+        if (!is404) {
+          setError(err instanceof Error ? err.message : 'Ошибка загрузки отзыва');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadReview();
+  }, [bookingId, canReview]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const remaining = 5 - (review?.images?.length ?? 0) - selectedFiles.length;
+    const filesToAdd = files.slice(0, Math.max(0, remaining));
+
+    setSelectedFiles((prev) => [...prev, ...filesToAdd]);
+    const newPreviews = filesToAdd.map((f) => URL.createObjectURL(f));
+    setPreviews((prev) => [...prev, ...newPreviews]);
+  };
+
+  const removeSelectedFile = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeReviewImage = async (imageId: string) => {
+    try {
+      await deleteReviewImage(bookingId, imageId);
+      setReview((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          images: prev.images?.filter((img) => img.imageId !== imageId),
+        };
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка удаления фото');
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!canReview || submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      // Create review
+      const newReview = await createReview({
+        bookingId,
+        rating,
+        text: text.trim() || undefined,
+      });
+
+      // Upload images if selected
+      if (selectedFiles.length > 0) {
+        const formData = new FormData();
+        selectedFiles.forEach((file) => {
+          formData.append('images', file);
+        });
+        await uploadReviewImages(bookingId, formData);
+      }
+
+      // Reload review to get full data with images
+      const updated = await getBookingReview(bookingId);
+      setReview(updated);
+
+      // Reset form
+      setRating(5);
+      setText('');
+      setSelectedFiles([]);
+      setPreviews([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка при сохранении отзыва');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateReview = async () => {
+    if (!review || !canReview || submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      // Update review
+      await updateReview(review.reviewId, {
+        rating,
+        text: text.trim() || undefined,
+      });
+
+      // Upload new images if selected
+      if (selectedFiles.length > 0) {
+        const formData = new FormData();
+        selectedFiles.forEach((file) => {
+          formData.append('images', file);
+        });
+        await uploadReviewImages(bookingId, formData);
+      }
+
+      // Reload review
+      const updated = await getBookingReview(bookingId);
+      setReview(updated);
+
+      // Reset form
+      setIsEditing(false);
+      setRating(5);
+      setText('');
+      setSelectedFiles([]);
+      setPreviews([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка при сохранении отзыва');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!review || !canReview || submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await deleteReview(review.reviewId);
+      setReview(null);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка при удалении отзыва');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!canReview) return null;
+  if (loading) return null;
+
+  return (
+    <Section title="Ваш отзыв" icon={<Star size={16} />}>
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {!review ? (
+        // No review yet - show form
+        <div className="flex flex-col gap-4">
+          {/* Star rating */}
+          <div>
+            <label className="block text-sm font-medium text-text/70 mb-2">Оценка</label>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  className="focus:outline-none transition-transform hover:scale-110"
+                >
+                  <Star
+                    size={24}
+                    className={rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Text area */}
+          <div>
+            <label className="block text-sm font-medium text-text/70 mb-2">Отзыв (необязательно)</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Поделитесь впечатлениями о номере..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm placeholder-text/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+              rows={4}
+            />
+          </div>
+
+          {/* Image previews */}
+          {previews.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {previews.map((preview, idx) => (
+                <div key={idx} className="relative rounded-lg overflow-hidden bg-gray-100">
+                  <img src={preview} alt={`preview-${idx}`} className="w-full h-24 object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedFile(idx)}
+                    className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Image upload */}
+          <div>
+            <label className="block text-sm font-medium text-text/70 mb-2">
+              Фото ({selectedFiles.length}/5)
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={selectedFiles.length >= 5}
+              className="w-full px-4 py-3 border border-dashed border-gray-300 rounded-xl text-sm text-text/50 hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Выберите фото (до 5)
+            </button>
+          </div>
+
+          {/* Submit button */}
+          <button
+            type="button"
+            onClick={handleSubmitReview}
+            disabled={submitting}
+            className="w-full px-4 py-3 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? 'Сохраняю...' : 'Оставить отзыв'}
+          </button>
+        </div>
+      ) : (
+        // Review exists - show display or edit
+        <div className="flex flex-col gap-4">
+          {/* Delete confirm inline */}
+          {showDeleteConfirm ? (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700 font-medium mb-3">Удалить отзыв?</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleDeleteReview}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {submitting ? 'Удаляю...' : 'Да, удалить'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-text rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : isEditing ? (
+            // Edit form
+            <div className="flex flex-col gap-4">
+              {/* Star rating */}
+              <div>
+                <label className="block text-sm font-medium text-text/70 mb-2">Оценка</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      className="focus:outline-none transition-transform hover:scale-110"
+                    >
+                      <Star
+                        size={24}
+                        className={rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Text area */}
+              <div>
+                <label className="block text-sm font-medium text-text/70 mb-2">Отзыв (необязательно)</label>
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Поделитесь впечатлениями о номере..."
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm placeholder-text/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                  rows={4}
+                />
+              </div>
+
+              {/* Existing images */}
+              {review.images && review.images.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-text/70 mb-2">Текущие фото</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {review.images.map((img) => (
+                      <div key={img.imageId} className="relative rounded-lg overflow-hidden bg-gray-100">
+                        <img
+                          src={resolveReviewImageUrl(img.imageUrl)}
+                          alt="review"
+                          className="w-full h-24 object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeReviewImage(img.imageId)}
+                          className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* New image previews */}
+              {previews.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-text/70 mb-2">Новые фото</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {previews.map((preview, idx) => (
+                      <div key={idx} className="relative rounded-lg overflow-hidden bg-gray-100">
+                        <img src={preview} alt={`preview-${idx}`} className="w-full h-24 object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeSelectedFile(idx)}
+                          className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add more images button */}
+              {((review.images?.length ?? 0) + selectedFiles.length < 5) && (
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-sm text-primary hover:text-primary/80 transition-colors"
+                  >
+                    + Добавить фото
+                  </button>
+                </div>
+              )}
+
+              {/* Save and cancel buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleUpdateReview}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-3 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Сохраняю...' : 'Сохранить'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setRating(review.rating);
+                    setText(review.text || '');
+                    setSelectedFiles([]);
+                    setPreviews([]);
+                  }}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-3 bg-gray-100 text-text rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Display review
+            <div className="flex flex-col gap-4">
+              {/* Stars */}
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    size={20}
+                    className={review.rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
+                  />
+                ))}
+              </div>
+
+              {/* Text */}
+              {review.text && <p className="text-sm text-text/70">{review.text}</p>}
+
+              {/* Images */}
+              {review.images && review.images.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {review.images.map((img) => (
+                    <img
+                      key={img.imageId}
+                      src={resolveReviewImageUrl(img.imageUrl)}
+                      alt="review"
+                      className="w-full h-24 object-cover rounded-lg"
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Edit and Delete buttons */}
+              <div className="flex gap-3 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(true);
+                    setRating(review.rating);
+                    setText(review.text || '');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-text rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Редактировать
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors"
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -823,6 +1315,16 @@ export default function BookingDetailPage() {
           </button>
         </div>
       )}
+
+      {/* Review section */}
+      <ReviewSection
+        bookingId={booking.bookingId}
+        isStaff={isStaff}
+        userId={user?.id}
+        bookingUserId={booking.userId}
+        bookingStatus={booking.status}
+        paymentStatus={booking.payment?.status}
+      />
 
       {/* No-show / action required banner */}
       {booking.refundStatus === 'ACTION_REQUIRED' && (

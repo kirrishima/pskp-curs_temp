@@ -18,7 +18,8 @@ const roomRoutes = require('./routes/rooms');
 const serviceRoutes = require('./routes/services');
 const roomServiceRoutes = require('./routes/room-services');
 const uploadRoutes = require('./routes/uploads');
-const userRoutes = require('./routes/users');
+const userRoutes   = require('./routes/users');
+const reviewRoutes = require('./routes/reviews');
 
 const wsManager = require('./services/websocket');
 const { runMigrations } = require('./services/migrate');
@@ -52,7 +53,8 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/room-services', roomServiceRoutes);
 app.use('/api/uploads', uploadRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/users',   userRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 // ── Static file serving for uploaded images ──────────────────────────────────
 const path = require('path');

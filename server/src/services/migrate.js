@@ -87,6 +87,56 @@ const steps = [
     name: '007_user_is_blocked',
     sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT FALSE`,
   },
+
+  // ── 008: reviews table ────────────────────────────────────────────────────
+  {
+    name: '008_create_reviews',
+    sql: `
+      CREATE TABLE IF NOT EXISTS reviews (
+        review_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        booking_id  UUID        UNIQUE NOT NULL REFERENCES bookings(booking_id) ON DELETE CASCADE,
+        user_id     UUID        NOT NULL REFERENCES "User"(id),
+        room_no     TEXT        NOT NULL REFERENCES rooms(room_no),
+        rating      INTEGER     NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        text        TEXT,
+        created_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMP   NOT NULL DEFAULT NOW()
+      )
+    `,
+  },
+  {
+    name: '008b_reviews_indexes',
+    sql: `
+      DO $$ BEGIN
+        CREATE INDEX IF NOT EXISTS reviews_room_no_idx  ON reviews(room_no);
+        CREATE INDEX IF NOT EXISTS reviews_user_id_idx  ON reviews(user_id);
+        CREATE INDEX IF NOT EXISTS reviews_created_at_idx ON reviews(created_at DESC);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `,
+  },
+
+  // ── 009: review_images table ──────────────────────────────────────────────
+  {
+    name: '009_create_review_images',
+    sql: `
+      CREATE TABLE IF NOT EXISTS review_images (
+        image_id    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        review_id   UUID        NOT NULL REFERENCES reviews(review_id) ON DELETE CASCADE,
+        image_url   TEXT        NOT NULL,
+        uploaded_at TIMESTAMP   NOT NULL DEFAULT NOW()
+      )
+    `,
+  },
+  {
+    name: '009b_review_images_index',
+    sql: `
+      DO $$ BEGIN
+        CREATE INDEX IF NOT EXISTS review_images_review_id_idx ON review_images(review_id);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `,
+  },
 ];
 
 async function runMigrations() {
