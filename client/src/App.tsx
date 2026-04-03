@@ -72,6 +72,7 @@ const GuestRoute = memo(function GuestRoute({ children }: { children: React.Reac
 const UserMenu = memo(function UserMenu() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAppSelector((s) => s.auth.user);
   const refreshToken = useAppSelector((s) => s.auth.refreshToken);
   const [open, setOpen] = useState(false);

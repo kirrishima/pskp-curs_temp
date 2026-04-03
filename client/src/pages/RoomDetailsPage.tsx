@@ -272,8 +272,8 @@ export default function RoomDetailsPage() {
 
         {/* Responsive grid: single column on mobile, 3-col on desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Left column: Room info — full width on mobile, 2/3 on desktop */}
-          <div className="lg:col-span-2 order-2 lg:order-1 space-y-6">
+          {/* Left column: Room info — full width on mobile, 2/3 on desktop (full width for manager) */}
+          <div className={`${isManager ? 'lg:col-span-3' : 'lg:col-span-2'} order-2 lg:order-1 space-y-6`}>
             {/* Room info card */}
             <div className="bg-white p-8 rounded-xl shadow-lg border border-ui">
               {/* Title and badges */}
@@ -391,7 +391,8 @@ export default function RoomDetailsPage() {
             </div>
           </div>
 
-          {/* Right column: booking / admin — full width on mobile (shows first), 1/3 on desktop */}
+          {/* Right column: booking / admin — hidden for manager, full width on mobile (shows first), 1/3 on desktop */}
+          {!isManager && (
           <div className="lg:col-span-1 order-1 lg:order-2">
             <div className="sticky top-4 space-y-4">
               {isAdmin ? (
@@ -422,13 +423,6 @@ export default function RoomDetailsPage() {
                       Удалить номер
                     </Button>
                   </div>
-                </div>
-              ) : isManager ? (
-                // Manager — no booking, just informational
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-ui">
-                  <p className="text-sm text-text/50 text-center">
-                    Бронирование доступно только клиентам.
-                  </p>
                 </div>
               ) : (
                 // Regular user booking
@@ -476,6 +470,7 @@ export default function RoomDetailsPage() {
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
 

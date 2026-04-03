@@ -101,9 +101,17 @@ router.get('/', resolveRole, async (req, res) => {
         where.endDate = { ...(where.endDate || {}), lte: new Date(req.query.dateTo) };
       }
 
-      // Search by booking ID fragment (UUID string operations work in Prisma/PG)
+      // Search by booking ID fragment.
+      // UUID fields in Prisma don't support `contains`, so we cast to text via raw SQL
+      // to find matching IDs, then use `in` on the result.
       if (req.query.search) {
-        where.bookingId = { contains: req.query.search.trim(), mode: 'insensitive' };
+        const searchPattern = `%${req.query.search.trim()}%`;
+        const matched = await prisma.$queryRaw`
+          SELECT booking_id::text AS id FROM bookings
+          WHERE booking_id::text ILIKE ${searchPattern}
+          LIMIT 200
+        `;
+        where.bookingId = { in: matched.map((r) => r.id) };
       }
     }
 

@@ -171,10 +171,11 @@ export default function BookingsPage() {
   }, [statusFilter]);
 
   useEffect(() => {
+    if (isStaff) return; // no-op: staff will be redirected before any data is needed
     const ac = new AbortController();
     load(ac.signal);
     return () => ac.abort();
-  }, [load]);
+  }, [load, isStaff]);
 
   const filtered = bookings; // server-side filtering; kept as-is for local re-renders
 
