@@ -21,6 +21,7 @@ import BookingsPage from '@/pages/BookingsPage';
 import AllBookingsPage from '@/pages/AllBookingsPage';
 import BookingDetailPage from '@/pages/BookingDetailPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
+import HotelReviewsPage from '@/pages/HotelReviewsPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
 
@@ -109,7 +110,8 @@ const UserMenu = memo(function UserMenu() {
     const PUBLIC_PATHS = ['/', '/rooms'];
     const isPublic =
       PUBLIC_PATHS.includes(location.pathname) ||
-      location.pathname.startsWith('/rooms/');
+      location.pathname.startsWith('/rooms/') ||
+      location.pathname.startsWith('/hotels/');
 
     if (!isPublic) {
       navigate('/', { replace: true });
@@ -265,6 +267,7 @@ function AppContent() {
           {/* Public */}
           <Route path="/rooms" element={<RoomSearchPage />} />
           <Route path="/rooms/:roomNo" element={<RoomDetailsPage />} />
+          <Route path="/hotels/:hotelCode/reviews" element={<HotelReviewsPage />} />
 
           {/* Guest only */}
           <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />

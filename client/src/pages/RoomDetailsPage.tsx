@@ -601,6 +601,9 @@ export default function RoomDetailsPage() {
                 </>
               )}
             </div>
+
+            {/* Reviews */}
+            <RoomReviewsSection roomNo={room.roomNo} hotelCode={room.hotelCode} />
           </div>
 
           {/* Right column: booking / admin — hidden for manager, full width on mobile (shows first), 1/3 on desktop */}
