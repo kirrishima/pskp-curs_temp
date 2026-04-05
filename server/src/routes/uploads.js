@@ -131,12 +131,19 @@ router.post(
 
       for (let i = 0; i < req.files.length; i++) {
         const file = req.files[i];
-        const imageUrl = `/uploads/rooms/${roomNo}/${file.filename}`;
+        const ext = path.extname(file.originalname).toLowerCase() || path.extname(file.filename).toLowerCase() || 'jpg';
+        const imageId = uuidv4();
+        const newFilename = `${imageId}${ext}`;
+        const oldPath = file.path;
+        const newPath = path.join(UPLOAD_ROOT, 'rooms', roomNo, newFilename);
+
+        fs.renameSync(oldPath, newPath);
 
         const image = await prisma.roomImage.create({
           data: {
+            imageId,
             roomNo,
-            imageUrl,
+            ext: ext.replace(/^\./, ''), // Remove leading dot
             isMain: isMain && i === 0, // Only first image can be main
           },
         });
@@ -157,7 +164,11 @@ router.post(
       }
 
       logger.info('Room images uploaded', { roomNo, count: createdImages.length });
-      res.status(201).json({ images: createdImages });
+      res.status(201).json({ images: createdImages.map(img => ({
+        imageId: img.imageId,
+        ext: img.ext,
+        isMain: img.isMain,
+      })) });
     } catch (err) {
       logger.error('Failed to upload room images', { error: err.message });
       res.status(500).json({ error: 'Failed to upload images' });
@@ -174,10 +185,9 @@ router.delete(
   async (req, res) => {
     try {
       const { roomNo, imageId } = req.params;
-      const id = parseInt(imageId, 10);
 
       const image = await prisma.roomImage.findFirst({
-        where: { imageId: id, roomNo },
+        where: { imageId, roomNo },
       });
 
       if (!image) {
@@ -185,15 +195,15 @@ router.delete(
       }
 
       // Delete file from disk
-      const filePath = path.join(process.cwd(), image.imageUrl);
+      const filePath = path.join(UPLOAD_ROOT, 'rooms', roomNo, `${image.imageId}.${image.ext}`);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
 
       // Delete from DB
-      await prisma.roomImage.delete({ where: { imageId: id } });
+      await prisma.roomImage.delete({ where: { imageId } });
 
-      logger.info('Room image deleted', { roomNo, imageId: id });
+      logger.info('Room image deleted', { roomNo, imageId });
       res.json({ message: 'Image deleted' });
     } catch (err) {
       logger.error('Failed to delete room image', { error: err.message });
@@ -292,24 +302,27 @@ router.post(
 
       for (const file of req.files) {
         const imageId = uuidv4();
-        const ext     = path.extname(file.originalname).toLowerCase() || path.extname(file.filename) || '.jpg';
-        const newName = `${imageId}${ext}`;
+        const ext     = path.extname(file.originalname).toLowerCase() || path.extname(file.filename) || 'jpg';
+        const cleanExt = ext.replace(/^\./, ''); // Remove leading dot
+        const newName = `${imageId}.${cleanExt}`;
         const newPath = path.join(dir, newName);
 
         // Rename from multer's temp name to the UUID-based name
         fs.renameSync(file.path, newPath);
 
-        const imageUrl = `/uploads/reviews/${bookingId}/${newName}`;
-
         const image = await prisma.reviewImage.create({
-          data: { imageId, reviewId: review.reviewId, imageUrl },
+          data: { imageId, reviewId: review.reviewId, ext: cleanExt, isMain: false },
         });
 
         createdImages.push(image);
       }
 
       logger.info('Review images uploaded', { reviewId: review.reviewId, count: createdImages.length });
-      res.status(201).json({ images: createdImages });
+      res.status(201).json({ images: createdImages.map(img => ({
+        imageId: img.imageId,
+        ext: img.ext,
+        isMain: img.isMain,
+      })) });
     } catch (err) {
       logger.error('Failed to upload review images', { error: err.message });
       res.status(500).json({ error: 'Failed to upload images' });
@@ -340,7 +353,7 @@ router.delete('/reviews/:bookingId/:imageId', authenticate, async (req, res) => 
     if (!image) return res.status(404).json({ error: 'Image not found' });
 
     // Delete file from disk
-    const filePath = path.join(process.cwd(), image.imageUrl);
+    const filePath = path.join(UPLOAD_ROOT, 'reviews', bookingId, `${image.imageId}.${image.ext}`);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
     await prisma.reviewImage.delete({ where: { imageId } });
@@ -403,21 +416,25 @@ router.post(
       for (const file of req.files) {
         const imageId = uuidv4();
         const ext = path.extname(file.originalname).toLowerCase();
-        const newFilename = `${imageId}${ext}`;
+        const cleanExt = ext.replace(/^\./, ''); // Remove leading dot
+        const newFilename = `${imageId}.${cleanExt}`;
         const newPath = path.join(hotelUploadDir(hotelCode), newFilename);
         fs.renameSync(file.path, newPath);
 
-        const imageUrl = `/uploads/hotels/${hotelCode}/${newFilename}`;
         const isMain = existingCount === 0 && savedImages.length === 0;
 
         const img = await prisma.hotelImage.create({
-          data: { imageId, hotelCode, imageUrl, isMain },
+          data: { imageId, hotelCode, ext: cleanExt, isMain },
         });
         savedImages.push(img);
       }
 
       logger.info('Hotel images uploaded', { hotelCode, count: savedImages.length });
-      res.status(201).json({ images: savedImages });
+      res.status(201).json({ images: savedImages.map(img => ({
+        imageId: img.imageId,
+        ext: img.ext,
+        isMain: img.isMain,
+      })) });
     } catch (err) {
       logger.error('Hotel image upload failed', { error: err.message });
       res.status(500).json({ error: 'Upload failed' });
@@ -435,7 +452,7 @@ router.delete('/hotels/:hotelCode/:imageId', authenticate, authorize('admin'), a
     if (image.hotelCode !== hotelCode) return res.status(403).json({ error: 'Access denied' });
 
     // Delete file from disk
-    const filePath = path.join(process.cwd(), image.imageUrl);
+    const filePath = path.join(UPLOAD_ROOT, 'hotels', hotelCode, `${image.imageId}.${image.ext}`);
     if (fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch { /* ignore */ }
     }

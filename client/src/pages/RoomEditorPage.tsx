@@ -35,12 +35,10 @@ import type { Room, Service, RoomServiceEntry, RoomServiceState, ServicePriceTyp
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
 
-function resolveImageUrl(url: string): string {
-  if (url.startsWith('/uploads/')) {
-    const base = API_BASE_URL.replace(/\/api\/?$/, '');
-    return base + url;
-  }
-  return url;
+function resolveImageUrl(imagesBase: string | undefined, imageId: number | string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -56,6 +54,7 @@ interface FormData {
   area: number | null;
   basePrice: number;
   status: 'ACTIVE' | 'MAINTENANCE' | 'CLOSED';
+  imagesBase?: string;
 }
 
 interface AddServiceModalState {
@@ -110,6 +109,7 @@ export default function RoomEditorPage() {
     area: null,
     basePrice: 0,
     status: 'ACTIVE',
+    imagesBase: undefined,
   });
 
   // Room data
@@ -185,6 +185,7 @@ export default function RoomEditorPage() {
             area: roomRes.room.area ?? null,
             basePrice: roomRes.room.basePrice,
             status: roomRes.room.status,
+            imagesBase: roomRes.room.imagesBase,
           });
         }
 
@@ -654,7 +655,7 @@ export default function RoomEditorPage() {
                 {images.map((img) => (
                   <div key={img.imageId} className="relative group">
                     <img
-                      src={resolveImageUrl(img.imageUrl)}
+                      src={resolveImageUrl(formData.imagesBase, img.imageId, img.ext)}
                       alt="Room"
                       className="w-full h-32 object-cover rounded-lg"
                     />

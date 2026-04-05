@@ -130,7 +130,13 @@ async function sendBookingConfirmation(booking) {
   const nights = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
 
   // ── Hotel logo URL ───────────────────────────────────────────────────────────
-  const hotelLogoUrl = _absoluteUrl(hotel.heroImageUrl);
+  // Hotel logo: use first/main hotel image from images array if available
+  const mainHotelImg = Array.isArray(hotel.images)
+    ? (hotel.images.find((img) => img.isMain) || hotel.images[0])
+    : null;
+  const hotelLogoUrl = mainHotelImg
+    ? _absoluteUrl(`/uploads/hotels/${hotel.hotelCode}/${mainHotelImg.imageId}.${mainHotelImg.ext}`)
+    : '';
 
   // ── Services table rows ─────────────────────────────────────────────────────
   const serviceRows = (bookingServices || []).map((bs) => {

@@ -68,6 +68,14 @@ function serializeRoom(room) {
     roomServices: Array.isArray(room.roomServices)
       ? room.roomServices.map(serializeRoomService)
       : room.roomServices,
+    imagesBase: `/uploads/rooms/${room.roomNo}`,
+    images: Array.isArray(room.images)
+      ? room.images.map(img => ({
+          imageId: img.imageId,
+          ext: img.ext,
+          isMain: img.isMain,
+        }))
+      : room.images,
   };
 }
 
@@ -85,6 +93,14 @@ function serializeHotel(hotel) {
     rooms: Array.isArray(hotel.rooms)
       ? hotel.rooms.map(serializeRoom)
       : hotel.rooms,
+    imagesBase: `/uploads/hotels/${hotel.hotelCode}`,
+    images: Array.isArray(hotel.images)
+      ? hotel.images.map(img => ({
+          imageId: img.imageId,
+          ext: img.ext,
+          isMain: img.isMain,
+        }))
+      : hotel.images,
   };
 }
 

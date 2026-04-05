@@ -58,11 +58,10 @@ function getHoursUntilCheckIn(startDate: string): number {
   return (checkIn.getTime() - Date.now()) / (1000 * 60 * 60);
 }
 
-function resolveReviewImageUrl(url: string): string {
-  if (url.startsWith('/uploads/')) {
-    return API_BASE_URL.replace(/\/api\/?$/, '') + url;
-  }
-  return url;
+function resolveReviewImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -532,7 +531,7 @@ function ReviewSection({ bookingId, isStaff, userId, bookingUserId, bookingStatu
                     {review.images.map((img) => (
                       <div key={img.imageId} className="relative rounded-lg overflow-hidden bg-gray-100">
                         <img
-                          src={resolveReviewImageUrl(img.imageUrl)}
+                          src={resolveReviewImageUrl(review.imagesBase, img.imageId, img.ext)}
                           alt="review"
                           className="w-full h-24 object-cover"
                         />
@@ -640,7 +639,7 @@ function ReviewSection({ bookingId, isStaff, userId, bookingUserId, bookingStatu
                   {review.images.map((img) => (
                     <img
                       key={img.imageId}
-                      src={resolveReviewImageUrl(img.imageUrl)}
+                      src={resolveReviewImageUrl(review.imagesBase, img.imageId, img.ext)}
                       alt="review"
                       className="w-full h-24 object-cover rounded-lg"
                     />
@@ -1049,7 +1048,7 @@ export default function BookingDetailPage() {
       {mainImage && (
         <div className="rounded-2xl overflow-hidden h-56 w-full">
           <img
-            src={mainImage.imageUrl}
+            src={resolveReviewImageUrl(booking.room?.imagesBase, String(mainImage.imageId), mainImage.ext)}
             alt={booking.room?.title ?? 'Номер'}
             className="w-full h-full object-cover"
           />

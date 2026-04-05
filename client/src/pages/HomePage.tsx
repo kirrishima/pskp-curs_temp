@@ -34,12 +34,10 @@ function getTomorrowDate(): string {
   return d.toISOString().split('T')[0];
 }
 
-function getImageUrl(imageUrl: string | undefined | null): string {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('/uploads/')) {
-    return `${API_BASE_URL.replace('/api', '')}${imageUrl}`;
-  }
-  return imageUrl;
+function resolveImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Star Rating ─────────────────────────────────────────────────────────────
@@ -159,7 +157,7 @@ const SearchForm = memo(function SearchForm() {
 
 const HotelCard = memo(function HotelCard({ hotel }: { hotel: Hotel }) {
   const mainImage = hotel.images?.find((img) => img.isMain) || hotel.images?.[0];
-  const imageUrl = mainImage ? getImageUrl(mainImage.imageUrl) : '';
+  const imageUrl = mainImage ? resolveImageUrl(hotel.imagesBase, mainImage.imageId, mainImage.ext) : '';
 
   const starCount = hotel.stars ? Math.round(hotel.stars) : 0;
 

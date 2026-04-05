@@ -20,12 +20,10 @@ import Shimmer from '@/components/ui/Shimmer';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getImageUrl(imageUrl: string | undefined | null): string {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('/uploads/')) {
-    return `${API_BASE_URL.replace('/api', '')}${imageUrl}`;
-  }
-  return imageUrl;
+function resolveImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 function formatDate(dateString: string): string {
@@ -56,12 +54,14 @@ const StarRating = memo(function StarRating({ count, size = 16 }: { count: numbe
 
 interface ImageLightboxProps {
   images: HotelImage[];
+  imagesBase: string | undefined;
   initialIndex: number;
   onClose: () => void;
 }
 
 const ImageLightbox = memo(function ImageLightbox({
   images,
+  imagesBase,
   initialIndex,
   onClose,
 }: ImageLightboxProps) {
@@ -104,7 +104,7 @@ const ImageLightbox = memo(function ImageLightbox({
 
         {/* Image */}
         <img
-          src={getImageUrl(image.imageUrl)}
+          src={resolveImageUrl(imagesBase, image.imageId, image.ext)}
           alt={`Hotel ${currentIndex + 1}`}
           className="max-w-full max-h-full object-contain"
         />
@@ -161,7 +161,7 @@ const ReviewCard = memo(function ReviewCard({ review }: { review: Review }) {
           {review.images.slice(0, 3).map((img) => (
             <div key={img.imageId} className="flex-shrink-0">
               <img
-                src={getImageUrl(img.imageUrl)}
+                src={resolveImageUrl(review.imagesBase, img.imageId, img.ext)}
                 alt="Review"
                 className="h-16 w-16 object-cover rounded"
               />
@@ -280,8 +280,6 @@ const HotelDetailPage = memo(function HotelDetailPage() {
   const starCount = hotel?.stars ? Math.round(hotel.stars) : 0;
   const hasImages = hotel?.images && hotel.images.length > 0;
   const mainImage = hasImages ? hotel?.images?.find((img) => img.isMain) || hotel?.images?.[0] : null;
-  // heroImageUrl acts as a fallback when no gallery images have been uploaded yet
-  const heroFallbackUrl = !hasImages ? (hotel?.heroImageUrl ?? null) : null;
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
@@ -304,13 +302,12 @@ const HotelDetailPage = memo(function HotelDetailPage() {
           <div className="max-w-7xl mx-auto px-4 py-8">
             <Shimmer className="w-full h-96 rounded-xl" />
           </div>
-        ) : hasImages || heroFallbackUrl ? (
+        ) : hasImages ? (
           <div className="max-w-7xl mx-auto px-4 py-8">
             {/* Main image */}
             <div
-              className={`relative w-full h-96 rounded-xl overflow-hidden ${hasImages ? 'cursor-pointer group' : ''}`}
+              className="relative w-full h-96 rounded-xl overflow-hidden cursor-pointer group"
               onClick={() => {
-                if (!hasImages) return;
                 const index = hotel!.images!.findIndex(
                   (img) => img.imageId === mainImage?.imageId,
                 );
@@ -319,22 +316,18 @@ const HotelDetailPage = memo(function HotelDetailPage() {
               }}
             >
               <img
-                src={getImageUrl(hasImages ? mainImage?.imageUrl : heroFallbackUrl)}
+                src={resolveImageUrl(hotel?.imagesBase, mainImage?.imageId || '', mainImage?.ext || '')}
                 alt={hotel?.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
-              {hasImages && (
-                <>
-                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-white text-sm font-medium">Просмотреть все фото</span>
-                  </div>
-                </>
-              )}
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-white text-sm font-medium">Просмотреть все фото</span>
+              </div>
             </div>
 
             {/* Thumbnails — only when gallery images are uploaded */}
-            {hasImages && hotel!.images!.length > 1 && (
+            {hotel!.images!.length > 1 && (
               <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
                 {hotel!.images!.map((img, idx) => (
                   <button
@@ -350,7 +343,7 @@ const HotelDetailPage = memo(function HotelDetailPage() {
                     }`}
                   >
                     <img
-                      src={getImageUrl(img.imageUrl)}
+                      src={resolveImageUrl(hotel?.imagesBase, img.imageId, img.ext)}
                       alt="Thumbnail"
                       className="w-full h-full object-cover"
                     />
@@ -551,6 +544,7 @@ const HotelDetailPage = memo(function HotelDetailPage() {
       {lightboxOpen && hotel?.images && hotel.images.length > 0 && (
         <ImageLightbox
           images={hotel.images}
+          imagesBase={hotel.imagesBase}
           initialIndex={lightboxIndex}
           onClose={() => setLightboxOpen(false)}
         />

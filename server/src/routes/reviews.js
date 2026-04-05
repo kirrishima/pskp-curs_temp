@@ -44,7 +44,14 @@ function serializeReview(review, authorUser) {
     rating:     review.rating,
     text:       review.text ?? null,
     authorName: resolveAuthorName(user),
-    images:     review.images ?? [],
+    imagesBase: `/uploads/reviews/${review.bookingId}`,
+    images:     Array.isArray(review.images)
+      ? review.images.map(img => ({
+          imageId: img.imageId,
+          ext: img.ext,
+          isMain: img.isMain,
+        }))
+      : [],
     room: review.room
       ? {
           roomNo:    review.room.roomNo,
@@ -335,8 +342,9 @@ router.delete('/:reviewId', authenticate, async (req, res) => {
     // Delete image files from disk before removing DB record
     const fs   = require('fs');
     const path = require('path');
+    const UPLOAD_ROOT = path.resolve(process.cwd(), 'uploads');
     for (const img of existing.images) {
-      const filePath = path.join(process.cwd(), img.imageUrl);
+      const filePath = path.join(UPLOAD_ROOT, 'reviews', existing.bookingId, `${img.imageId}.${img.ext}`);
       if (fs.existsSync(filePath)) {
         try { fs.unlinkSync(filePath); } catch { /* ignore */ }
       }

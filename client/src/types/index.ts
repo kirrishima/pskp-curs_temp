@@ -52,7 +52,7 @@ export interface AuthTokens {
 export interface HotelImage {
   imageId:    string;
   hotelCode:  string;
-  imageUrl:   string;
+  ext:        string;
   isMain:     boolean;
   uploadedAt: string;
 }
@@ -65,7 +65,7 @@ export interface Hotel {
   description?: string | null;
   tagline?: string | null;
   aboutText?: string | null;
-  heroImageUrl?: string | null;
+  imagesBase?: string;
   city?: string | null;
   address?: string | null;
   phone?: string | null;
@@ -108,14 +108,15 @@ export interface Room {
   createdAt?: string;
 
   hotel?: { hotelCode: string; name: string; city?: string | null };
+  imagesBase?: string;
   images?: RoomImage[];
   roomServices?: RoomServiceEntry[];
 }
 
 export interface RoomImage {
-  imageId: number;
+  imageId: string;
   roomNo: string;
-  imageUrl: string;
+  ext: string;
   isMain: boolean;
   uploadedAt?: string;
 }
@@ -237,7 +238,7 @@ export interface Payment {
 export interface ReviewImage {
   imageId:    string;
   reviewId:   string;
-  imageUrl:   string;
+  ext:        string;
   uploadedAt: string;
 }
 
@@ -249,6 +250,7 @@ export interface Review {
   rating:     number;
   text:       string | null;
   authorName: string;
+  imagesBase?: string;
   images:     ReviewImage[];
   room?: {
     roomNo:    string;

@@ -154,7 +154,6 @@ model Hotel {
   description  String?
   tagline      String?
   aboutText    String?  @map("about_text")
-  heroImageUrl String?  @map("hero_image_url")
   city         String?
   address      String?
   phone        String?
@@ -176,7 +175,7 @@ model HotelImage {
   imageId    String   @id @default(uuid()) @map("image_id") @db.Uuid
   hotelCode  String   @map("hotel_code")
   hotel      Hotel    @relation(fields: [hotelCode], references: [hotelCode], onDelete: Cascade)
-  imageUrl   String   @map("image_url")
+  ext        String   @map("ext")
   isMain     Boolean  @default(false) @map("is_main")
   uploadedAt DateTime @default(now()) @map("uploaded_at")
 
@@ -223,11 +222,11 @@ model Room {
 // ── Room Images ─────────────────────────────────────────────────────────────
 
 model RoomImage {
-  imageId    Int      @id @default(autoincrement()) @map("image_id")
+  imageId    String   @id @default(uuid()) @map("image_id") @db.Uuid
   roomNo     String   @map("room_no")
   room       Room     @relation(fields: [roomNo], references: [roomNo], onDelete: Cascade)
 
-  imageUrl   String   @map("image_url")
+  ext        String   @map("ext")
   isMain     Boolean  @default(false) @map("is_main")
 
   uploadedAt DateTime @default(now()) @map("uploaded_at")
@@ -413,7 +412,8 @@ model ReviewImage {
   imageId    String   @id @default(uuid()) @map("image_id") @db.Uuid
   reviewId   String   @map("review_id") @db.Uuid
   review     Review   @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
-  imageUrl   String   @map("image_url")
+  ext        String   @map("ext")
+  isMain     Boolean  @default(false) @map("is_main")
   uploadedAt DateTime @default(now()) @map("uploaded_at")
 
   @@index([reviewId])

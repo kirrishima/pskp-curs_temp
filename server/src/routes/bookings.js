@@ -133,7 +133,7 @@ router.get('/', resolveRole, async (req, res) => {
           title: true,
           floor: true,
           basePrice: true,
-          images: { where: { isMain: true }, take: 1, select: { imageUrl: true } },
+          images: { where: { isMain: true }, take: 1, select: { imageId: true, ext: true, isMain: true } },
           hotel: { select: { hotelCode: true, name: true, city: true } },
         },
       },

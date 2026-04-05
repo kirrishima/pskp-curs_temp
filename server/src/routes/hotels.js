@@ -26,7 +26,7 @@ router.get('/public', async (req, res) => {
   try {
     const hotels = await prisma.hotel.findMany({
       include: {
-        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
+        images: { select: { imageId: true, ext: true, isMain: true }, orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
         _count: { select: { rooms: true } },
       },
       orderBy: { name: 'asc' },
@@ -48,9 +48,7 @@ router.get('/public', async (req, res) => {
 
     res.json({
       hotels: hotels.map((h) => ({
-        ...h,
-        latitude: h.latitude ? Number(h.latitude) : null,
-        longitude: h.longitude ? Number(h.longitude) : null,
+        ...serializeHotel(h),
         averageRating: ratingMap[h.hotelCode]?.averageRating ?? null,
         totalReviews: ratingMap[h.hotelCode]?.totalReviews ?? 0,
       })),
@@ -70,7 +68,7 @@ router.get('/public/:hotelCode', async (req, res) => {
     const hotel = await prisma.hotel.findUnique({
       where: { hotelCode },
       include: {
-        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
+        images: { select: { imageId: true, ext: true, isMain: true }, orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
         _count: { select: { rooms: true } },
       },
     });
@@ -79,13 +77,7 @@ router.get('/public/:hotelCode', async (req, res) => {
       return res.status(404).json({ error: 'Hotel not found' });
     }
 
-    res.json({
-      hotel: {
-        ...hotel,
-        latitude: hotel.latitude ? Number(hotel.latitude) : null,
-        longitude: hotel.longitude ? Number(hotel.longitude) : null,
-      },
-    });
+    res.json({ hotel: serializeHotel(hotel) });
   } catch (err) {
     logger.error('Failed to get public hotel info', { error: err.message });
     res.status(500).json({ error: 'Failed to get hotel info' });
@@ -98,7 +90,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const hotels = await prisma.hotel.findMany({
       include: {
-        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
+        images: { select: { imageId: true, ext: true, isMain: true }, orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
       },
       orderBy: { name: 'asc' },
     });
@@ -119,7 +111,7 @@ router.get('/:hotelCode', authenticate, async (req, res) => {
     const hotel = await prisma.hotel.findUnique({
       where: { hotelCode },
       include: {
-        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
+        images: { select: { imageId: true, ext: true, isMain: true }, orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
         rooms: {
           select: {
             roomNo: true,

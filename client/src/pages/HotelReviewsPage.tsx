@@ -18,9 +18,10 @@ import type { Review, ReviewsPagination, ReviewsStats } from '@/types';
 
 // ─── URL resolver ────────────────────────────────────────────────────────────
 
-function resolveUrl(url: string): string {
-  if (url.startsWith('/uploads/')) return API_BASE_URL.replace(/\/api\/?$/, '') + url;
-  return url;
+function resolveImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -52,10 +53,14 @@ function Stars({ rating, size = 16 }: { rating: number; size?: number }) {
 // ─── Lightbox modal ──────────────────────────────────────────────────────────
 
 function ImageLightbox({
-  imageUrl,
+  imagesBase,
+  imageId,
+  ext,
   onClose,
 }: {
-  imageUrl: string;
+  imagesBase: string | undefined;
+  imageId: string;
+  ext: string;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -76,7 +81,7 @@ function ImageLightbox({
         onClick={(e) => e.stopPropagation()}
       >
         <img
-          src={resolveUrl(imageUrl)}
+          src={resolveImageUrl(imagesBase, imageId, ext)}
           alt="Review image"
           className="w-full h-full object-contain rounded-lg"
         />
@@ -95,8 +100,14 @@ function ImageLightbox({
 
 // ─── Review card ─────────────────────────────────────────────────────────────
 
+interface ExpandedImage {
+  imagesBase: string | undefined;
+  imageId: string;
+  ext: string;
+}
+
 function ReviewCard({ review }: { review: Review }) {
-  const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
+  const [expandedImage, setExpandedImage] = useState<ExpandedImage | null>(null);
   const displayImages = review.images.slice(0, 3);
 
   return (
@@ -126,11 +137,11 @@ function ReviewCard({ review }: { review: Review }) {
               <button
                 key={img.imageId}
                 type="button"
-                onClick={() => setExpandedImageUrl(img.imageUrl)}
+                onClick={() => setExpandedImage({ imagesBase: review.imagesBase, imageId: img.imageId, ext: img.ext })}
                 className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity flex-shrink-0"
               >
                 <img
-                  src={resolveUrl(img.imageUrl)}
+                  src={resolveImageUrl(review.imagesBase, img.imageId, img.ext)}
                   alt="Review"
                   className="w-full h-full object-cover"
                 />
@@ -165,10 +176,12 @@ function ReviewCard({ review }: { review: Review }) {
       </div>
 
       {/* Lightbox */}
-      {expandedImageUrl && (
+      {expandedImage && (
         <ImageLightbox
-          imageUrl={expandedImageUrl}
-          onClose={() => setExpandedImageUrl(null)}
+          imagesBase={expandedImage.imagesBase}
+          imageId={expandedImage.imageId}
+          ext={expandedImage.ext}
+          onClose={() => setExpandedImage(null)}
         />
       )}
     </>

@@ -105,11 +105,10 @@ function nightsLabel(n: number): string {
   return `${n} ночей`;
 }
 
-function resolveImageUrl(url: string): string {
-  if (url.startsWith('/uploads/')) {
-    return `${API_BASE_URL.replace(/\/api\/?$/, '')}${url}`;
-  }
-  return url;
+function resolveImageUrl(imagesBase: string | undefined, imageId: number | string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Location state ───────────────────────────────────────────────────────────
@@ -1178,7 +1177,7 @@ export default function CheckoutPage() {
           <div className="flex items-start gap-4">
             {room.images?.[0] && (
               <img
-                src={resolveImageUrl(room.images[0].imageUrl)}
+                src={resolveImageUrl(room.imagesBase, room.images[0].imageId, room.images[0].ext)}
                 alt={room.title}
                 className="w-20 h-16 object-cover rounded-lg flex-shrink-0"
               />

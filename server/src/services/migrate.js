@@ -157,6 +157,109 @@ const steps = [
       CREATE INDEX IF NOT EXISTS hotel_images_hotel_code_idx ON hotel_images(hotel_code)
     `,
   },
+
+  // ── 011: Add ext column to room_images (idempotent)
+  {
+    name: '011_room_images_add_ext',
+    sql: `ALTER TABLE room_images ADD COLUMN IF NOT EXISTS ext VARCHAR(10)`,
+  },
+  // ── 011b: Populate ext from image_url in room_images (only if image_url column still exists)
+  {
+    name: '011b_room_images_populate_ext',
+    sql: `
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='room_images' AND column_name='image_url') THEN
+          UPDATE room_images SET ext = LOWER(REGEXP_REPLACE(image_url, '^.*\\.', '')) WHERE ext IS NULL OR ext = '';
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `,
+  },
+  // ── 011c: Drop image_url from room_images
+  {
+    name: '011c_room_images_drop_image_url',
+    sql: `ALTER TABLE room_images DROP COLUMN IF EXISTS image_url`,
+  },
+
+  // ── 012: Add ext column to review_images (idempotent)
+  {
+    name: '012_review_images_add_ext',
+    sql: `ALTER TABLE review_images ADD COLUMN IF NOT EXISTS ext VARCHAR(10)`,
+  },
+  // ── 012b: Populate ext from image_url in review_images
+  {
+    name: '012b_review_images_populate_ext',
+    sql: `
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='review_images' AND column_name='image_url') THEN
+          UPDATE review_images SET ext = LOWER(REGEXP_REPLACE(image_url, '^.*\\.', '')) WHERE ext IS NULL OR ext = '';
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `,
+  },
+  // ── 012c: Drop image_url from review_images
+  {
+    name: '012c_review_images_drop_image_url',
+    sql: `ALTER TABLE review_images DROP COLUMN IF EXISTS image_url`,
+  },
+
+  // ── 013: Add ext column to hotel_images (idempotent)
+  {
+    name: '013_hotel_images_add_ext',
+    sql: `ALTER TABLE hotel_images ADD COLUMN IF NOT EXISTS ext VARCHAR(10)`,
+  },
+  // ── 013b: Populate ext from image_url in hotel_images
+  {
+    name: '013b_hotel_images_populate_ext',
+    sql: `
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hotel_images' AND column_name='image_url') THEN
+          UPDATE hotel_images SET ext = LOWER(REGEXP_REPLACE(image_url, '^.*\\.', '')) WHERE ext IS NULL OR ext = '';
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `,
+  },
+  // ── 013c: Drop image_url from hotel_images
+  {
+    name: '013c_hotel_images_drop_image_url',
+    sql: `ALTER TABLE hotel_images DROP COLUMN IF EXISTS image_url`,
+  },
+
+  // ── 014: Drop hero_image_url from hotels
+  {
+    name: '014_hotels_drop_hero_image_url',
+    sql: `ALTER TABLE hotels DROP COLUMN IF EXISTS hero_image_url`,
+  },
+
+  // ── 015: Add is_main column to review_images
+  {
+    name: '015_review_images_add_is_main',
+    sql: `ALTER TABLE review_images ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE`,
+  },
+
+  // ── 016: Convert room_images.image_id from SERIAL integer to UUID text.
+  //         Steps: drop sequence default → change type → drop old sequence.
+  //         Safe to re-run (checks data_type = 'integer' first).
+  {
+    name: '016_room_images_image_id_to_uuid',
+    sql: `
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'room_images'
+            AND column_name = 'image_id'
+            AND data_type = 'integer'
+        ) THEN
+          ALTER TABLE room_images ALTER COLUMN image_id DROP DEFAULT;
+          ALTER TABLE room_images ALTER COLUMN image_id TYPE UUID USING gen_random_uuid();
+          DROP SEQUENCE IF EXISTS room_images_image_id_seq;
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `,
+  },
 ];
 
 async function runMigrations() {

@@ -3,8 +3,15 @@ import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { CalendarDays, ChevronRight, BedDouble, Loader2, AlertCircle, Receipt } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { getMyBookings } from '@/api/hotelApi';
+import { API_BASE_URL } from '@/api/axiosInstance';
 import { fmtPrice } from '@/utils/currency';
 import type { Booking, BookingStatus } from '@/types';
+
+function resolveRoomImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +73,10 @@ const FILTER_OPTIONS: { label: string; value: string | undefined }[] = [
 function BookingCard({ booking }: { booking: Booking }) {
   const navigate = useNavigate();
   const nights = getNights(booking.startDate, booking.endDate);
-  const imageUrl = (booking.room as { images?: { imageUrl: string }[] } | undefined)?.images?.[0]?.imageUrl;
+  const firstImg = booking.room?.images?.[0];
+  const imageUrl = firstImg
+    ? resolveRoomImageUrl(booking.room?.imagesBase, String(firstImg.imageId), firstImg.ext)
+    : undefined;
   const hotelName = booking.room?.hotel?.name ?? 'Moonglow Hotel';
 
   return (

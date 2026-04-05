@@ -90,12 +90,10 @@ const ServiceBadge = memo(function ServiceBadge({
 
 // ─── Image Handler ───────────────────────────────────────────────────────────
 
-function getImageUrl(imageUrl: string | undefined): string {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('/uploads/')) {
-    return `${API_BASE_URL.replace('/api', '')}${imageUrl}`;
-  }
-  return imageUrl;
+function resolveImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Placeholder ─────────────────────────────────────────────────────────────
@@ -121,7 +119,7 @@ const RoomCard = memo(function RoomCard({
   isAdmin = false,
 }: RoomCardProps) {
   const mainImage = room.images?.find((img) => img.isMain) || room.images?.[0];
-  const imageUrl = mainImage ? getImageUrl(mainImage.imageUrl) : '';
+  const imageUrl = mainImage ? resolveImageUrl(room.imagesBase, String(mainImage.imageId), mainImage.ext) : '';
   const displayServices = room.roomServices?.slice(0, 5) || [];
 
   return (

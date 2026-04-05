@@ -168,12 +168,10 @@ const HotelsPage = memo(function HotelsPage() {
   };
 
   // Helper to resolve image URLs
-  function resolveImageUrl(url: string): string {
-    if (url.startsWith('/uploads/')) {
-      const base = API_BASE_URL.replace(/\/api\/?$/, '');
-      return base + url;
-    }
-    return url;
+  function resolveImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+    if (!imagesBase) return '';
+    const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+    return `${serverBase}${imagesBase}/${imageId}.${ext}`;
   }
 
   // Handle hotel image upload
@@ -551,7 +549,7 @@ const HotelsPage = memo(function HotelsPage() {
                   {editingHotel.images.map((img) => (
                     <div key={img.imageId} className="relative group">
                       <img
-                        src={resolveImageUrl(img.imageUrl)}
+                        src={resolveImageUrl(editingHotel.imagesBase, img.imageId, img.ext)}
                         alt="Фото отеля"
                         className={`w-full h-24 object-cover rounded-lg border-2 ${img.isMain ? 'border-primary' : 'border-transparent'}`}
                       />

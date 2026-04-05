@@ -324,7 +324,7 @@ router.get('/search', optionalAuthenticate, resolveRole, async (req, res) => {
           select: { hotelCode: true, name: true, city: true },
         },
         images: {
-          select: { imageId: true, imageUrl: true, isMain: true },
+          select: { imageId: true, ext: true, isMain: true },
           orderBy: [{ isMain: 'desc' }, { imageId: 'asc' }],
         },
         roomServices: {

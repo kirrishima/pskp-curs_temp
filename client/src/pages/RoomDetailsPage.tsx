@@ -36,12 +36,10 @@ import type { Room, Review, ReviewsPagination, ReviewsStats } from '@/types';
 
 // ─── Image URL Helper ───────────────────────────────────────────────────────
 
-function resolveImageUrl(url: string): string {
-  if (url.startsWith('/uploads/')) {
-    const base = API_BASE_URL.replace(/\/api\/?$/, '');
-    return base + url;
-  }
-  return url;
+function resolveImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
 }
 
 // ─── Star display ────────────────────────────────────────────────────────────
@@ -85,11 +83,11 @@ function ReviewCard({ review, onImageClick }: { review: Review; onImageClick: (u
             <button
               key={img.imageId}
               type="button"
-              onClick={() => onImageClick(resolveImageUrl(img.imageUrl))}
+              onClick={() => onImageClick(resolveImageUrl(review.imagesBase, img.imageId, img.ext))}
               className="w-16 h-16 rounded-lg overflow-hidden border border-gray-100 hover:opacity-90 transition-opacity"
             >
               <img
-                src={resolveImageUrl(img.imageUrl)}
+                src={resolveImageUrl(review.imagesBase, img.imageId, img.ext)}
                 alt="Фото отзыва"
                 className="w-full h-full object-cover"
               />
@@ -450,7 +448,7 @@ export default function RoomDetailsPage() {
               {/* Mobile: single full-width image */}
               <div className="lg:hidden">
                 <img
-                  src={resolveImageUrl(mainImage.imageUrl)}
+                  src={resolveImageUrl(room.imagesBase, String(mainImage.imageId), mainImage.ext)}
                   alt={room.title}
                   className="w-full h-64 object-cover rounded-xl shadow-lg"
                 />
@@ -460,7 +458,7 @@ export default function RoomDetailsPage() {
               <div className="hidden lg:grid grid-cols-5 gap-2">
                 <div className="col-span-3 row-span-2">
                   <img
-                    src={resolveImageUrl(mainImage.imageUrl)}
+                    src={resolveImageUrl(room.imagesBase, String(mainImage.imageId), mainImage.ext)}
                     alt={room.title}
                     className="w-full h-80 object-cover rounded-lg shadow-lg"
                   />
@@ -468,7 +466,7 @@ export default function RoomDetailsPage() {
                 {otherImages.slice(0, 4).map((img, idx) => (
                   <div key={img.imageId} className={idx === 3 ? 'col-span-2' : ''}>
                     <img
-                      src={resolveImageUrl(img.imageUrl)}
+                      src={resolveImageUrl(room.imagesBase, String(img.imageId), img.ext)}
                       alt={`${room.title} ${idx + 2}`}
                       className="w-full h-36 object-cover rounded-lg shadow-md"
                     />

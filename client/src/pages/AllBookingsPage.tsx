@@ -19,8 +19,15 @@ import {
 } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { getMyBookings } from '@/api/hotelApi';
+import { API_BASE_URL } from '@/api/axiosInstance';
 import { fmtPrice } from '@/utils/currency';
 import type { Booking, BookingStatus, BookingsPagination } from '@/types';
+
+function resolveRoomImageUrl(imagesBase: string | undefined, imageId: string, ext: string): string {
+  if (!imagesBase) return '';
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${serverBase}${imagesBase}/${imageId}.${ext}`;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -102,7 +109,11 @@ const ALL_STATUSES: { label: string; value: string }[] = [
 function BookingCard({ booking, isAdmin }: { booking: Booking; isAdmin: boolean }) {
   const navigate = useNavigate();
   const nights = getNights(booking.startDate, booking.endDate);
-  const imageUrl = (booking.room as { images?: { imageUrl: string }[] } | undefined)?.images?.[0]?.imageUrl;
+  const room = booking.room;
+  const firstImg = room?.images?.[0];
+  const imageUrl = firstImg
+    ? resolveRoomImageUrl(room?.imagesBase, String(firstImg.imageId), firstImg.ext)
+    : undefined;
   const hotelName = booking.room?.hotel?.name ?? 'Moonglow Hotel';
 
   return (
