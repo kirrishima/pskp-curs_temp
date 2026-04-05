@@ -20,6 +20,47 @@ const { serializeHotel } = require('../utils/serializers');
 const logger = createLogger('Hotels');
 const router = Router();
 
+// ── Public hotel list (no auth) ────────────────────────────────────────────
+
+router.get('/public', async (req, res) => {
+  try {
+    const hotels = await prisma.hotel.findMany({
+      include: {
+        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
+        _count: { select: { rooms: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Compute average rating per hotel from reviews through rooms
+    const hotelCodes = hotels.map((h) => h.hotelCode);
+    const ratings = await Promise.all(
+      hotelCodes.map(async (hotelCode) => {
+        const agg = await prisma.review.aggregate({
+          where: { room: { hotelCode } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        });
+        return { hotelCode, averageRating: agg._avg.rating ? Math.round(agg._avg.rating * 10) / 10 : null, totalReviews: agg._count.rating };
+      })
+    );
+    const ratingMap = Object.fromEntries(ratings.map((r) => [r.hotelCode, r]));
+
+    res.json({
+      hotels: hotels.map((h) => ({
+        ...h,
+        latitude: h.latitude ? Number(h.latitude) : null,
+        longitude: h.longitude ? Number(h.longitude) : null,
+        averageRating: ratingMap[h.hotelCode]?.averageRating ?? null,
+        totalReviews: ratingMap[h.hotelCode]?.totalReviews ?? 0,
+      })),
+    });
+  } catch (err) {
+    logger.error('Failed to list public hotels', { error: err.message });
+    res.status(500).json({ error: 'Failed to list hotels' });
+  }
+});
+
 // ── Public hotel info (no auth) ─────────────────────────────────────────────
 
 router.get('/public/:hotelCode', async (req, res) => {
@@ -28,20 +69,8 @@ router.get('/public/:hotelCode', async (req, res) => {
 
     const hotel = await prisma.hotel.findUnique({
       where: { hotelCode },
-      select: {
-        hotelCode: true,
-        name: true,
-        description: true,
-        tagline: true,
-        aboutText: true,
-        heroImageUrl: true,
-        city: true,
-        address: true,
-        phone: true,
-        email: true,
-        stars: true,
-        latitude: true,
-        longitude: true,
+      include: {
+        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
         _count: { select: { rooms: true } },
       },
     });
@@ -50,7 +79,13 @@ router.get('/public/:hotelCode', async (req, res) => {
       return res.status(404).json({ error: 'Hotel not found' });
     }
 
-    res.json({ hotel: serializeHotel(hotel) });
+    res.json({
+      hotel: {
+        ...hotel,
+        latitude: hotel.latitude ? Number(hotel.latitude) : null,
+        longitude: hotel.longitude ? Number(hotel.longitude) : null,
+      },
+    });
   } catch (err) {
     logger.error('Failed to get public hotel info', { error: err.message });
     res.status(500).json({ error: 'Failed to get hotel info' });
@@ -62,6 +97,9 @@ router.get('/public/:hotelCode', async (req, res) => {
 router.get('/', authenticate, async (req, res) => {
   try {
     const hotels = await prisma.hotel.findMany({
+      include: {
+        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -81,6 +119,7 @@ router.get('/:hotelCode', authenticate, async (req, res) => {
     const hotel = await prisma.hotel.findUnique({
       where: { hotelCode },
       include: {
+        images: { orderBy: [{ isMain: 'desc' }, { uploadedAt: 'asc' }] },
         rooms: {
           select: {
             roomNo: true,

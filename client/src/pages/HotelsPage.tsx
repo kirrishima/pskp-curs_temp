@@ -1,5 +1,5 @@
-import React, { memo, useState, useEffect, useCallback } from 'react';
-import { Edit2, Trash2, Info } from 'lucide-react';
+import React, { memo, useState, useEffect, useCallback, useRef } from 'react';
+import { Edit2, Trash2, Info, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import useAppSelector from '@/hooks/useAppSelector';
 import Button from '@/components/ui/Button';
@@ -9,6 +9,8 @@ import ConfirmModal from '@/components/modals/ConfirmModal';
 import AlertModal from '@/components/modals/AlertModal';
 import { useModal } from '@/hooks/useModal';
 import * as hotelApi from '@/api/hotelApi';
+import { uploadHotelImages, deleteHotelImage, setMainHotelImage } from '@/api/hotelApi';
+import { API_BASE_URL } from '@/api/axiosInstance';
 import type { Hotel } from '@/types';
 
 // ─── Create/Edit Form State ───────────────────────────────────────────────
@@ -47,6 +49,9 @@ const HotelsPage = memo(function HotelsPage() {
     phone: '',
     email: '',
   });
+  const [editingHotel, setEditingHotel] = useState<Hotel | null>(null);
+  const hotelImgInputRef = useRef<HTMLInputElement>(null);
+  const [imgUploading, setImgUploading] = useState(false);
 
   // Load hotels
   const loadHotels = useCallback(async () => {
@@ -135,6 +140,7 @@ const HotelsPage = memo(function HotelsPage() {
 
       await hotelApi.updateHotel(editModal.payload.hotelCode, payload);
       editModal.close();
+      setEditingHotel(null);
       setFormData({
         hotelCode: '',
         name: '',
@@ -158,6 +164,55 @@ const HotelsPage = memo(function HotelsPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Helper to resolve image URLs
+  function resolveImageUrl(url: string): string {
+    if (url.startsWith('/uploads/')) {
+      const base = API_BASE_URL.replace(/\/api\/?$/, '');
+      return base + url;
+    }
+    return url;
+  }
+
+  // Handle hotel image upload
+  const handleHotelImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editingHotel || !e.target.files?.length) return;
+    setImgUploading(true);
+    try {
+      const formData = new FormData();
+      Array.from(e.target.files).forEach((f) => formData.append('images', f));
+      const result = await uploadHotelImages(editingHotel.hotelCode, formData);
+      setEditingHotel((prev) => prev ? { ...prev, images: [...(prev.images ?? []), ...result.images] } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setImgUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteHotelImage = async (imageId: string) => {
+    if (!editingHotel) return;
+    try {
+      await deleteHotelImage(editingHotel.hotelCode, imageId);
+      setEditingHotel((prev) => prev ? { ...prev, images: (prev.images ?? []).filter((i) => i.imageId !== imageId) } : prev);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSetMainImage = async (imageId: string) => {
+    if (!editingHotel) return;
+    try {
+      await setMainHotelImage(editingHotel.hotelCode, imageId);
+      setEditingHotel((prev) => prev ? {
+        ...prev,
+        images: (prev.images ?? []).map((i) => ({ ...i, isMain: i.imageId === imageId })),
+      } : prev);
+    } catch {
+      // ignore
     }
   };
 
@@ -306,6 +361,7 @@ const HotelsPage = memo(function HotelsPage() {
                           phone: hotel.phone || '',
                           email: hotel.email || '',
                         });
+                        setEditingHotel(hotel);
                         editModal.open({
                           hotelCode: hotel.hotelCode,
                           name: hotel.name,
@@ -483,6 +539,69 @@ const HotelsPage = memo(function HotelsPage() {
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             disabled={isLoading}
           />
+
+          {/* Image Gallery — only for existing hotels */}
+          {editingHotel && (
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-semibold text-text mb-3">Фотографии отеля</h3>
+
+              {/* Existing images grid */}
+              {editingHotel.images && editingHotel.images.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {editingHotel.images.map((img) => (
+                    <div key={img.imageId} className="relative group">
+                      <img
+                        src={resolveImageUrl(img.imageUrl)}
+                        alt="Фото отеля"
+                        className={`w-full h-24 object-cover rounded-lg border-2 ${img.isMain ? 'border-primary' : 'border-transparent'}`}
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                        {!img.isMain && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetMainImage(img.imageId)}
+                            className="p-1 bg-white rounded text-xs text-text hover:bg-primary hover:text-white transition-colors"
+                            title="Сделать главной"
+                          >
+                            <Star size={12} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteHotelImage(img.imageId)}
+                          className="p-1 bg-white rounded text-xs text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                          title="Удалить"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      {img.isMain && (
+                        <span className="absolute top-1 left-1 bg-primary text-white text-xs px-1.5 py-0.5 rounded-full">Главное</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload new images */}
+              <input
+                ref={hotelImgInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleHotelImageUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => hotelImgInputRef.current?.click()}
+                disabled={imgUploading}
+                className="w-full px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-text/50 hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+              >
+                {imgUploading ? 'Загружаю...' : 'Добавить фотографии'}
+              </button>
+            </div>
+          )}
         </div>
       </Modal>
 

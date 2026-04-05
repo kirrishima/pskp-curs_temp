@@ -17,6 +17,7 @@ import {
   X,
   Loader2,
   AlertCircle,
+  Building2,
 } from 'lucide-react';
 
 import useAppSelector from '@/hooks/useAppSelector';
@@ -497,6 +498,16 @@ export default function RoomDetailsPage() {
                       <Badge variant="default">{room.roomNo}</Badge>
                       <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
                     </div>
+                  )}
+                  {room.hotel && (
+                    <Link
+                      to={`/hotels/${room.hotel.hotelCode}`}
+                      className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium mt-3"
+                    >
+                      <Building2 size={14} />
+                      {room.hotel.name}
+                      {room.hotel.city && <span className="text-text/40 font-normal">· {room.hotel.city}</span>}
+                    </Link>
                   )}
                 </div>
               </div>

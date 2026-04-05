@@ -22,6 +22,7 @@ import AllBookingsPage from '@/pages/AllBookingsPage';
 import BookingDetailPage from '@/pages/BookingDetailPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
 import HotelReviewsPage from '@/pages/HotelReviewsPage';
+import HotelDetailPage from '@/pages/HotelDetailPage';
 
 // ─── Route guards ────────────────────────────────────────────────────────────
 
@@ -231,6 +232,9 @@ function AppContent() {
             <Link to="/rooms" className="text-sm text-text/60 hover:text-text transition-colors">
               Номера
             </Link>
+            <Link to="/hotels" className="text-sm text-text/60 hover:text-text transition-colors">
+              Отели
+            </Link>
             {isRegularUser && (
               <Link to="/bookings" className="text-sm text-text/60 hover:text-text transition-colors">
                 Мои бронирования
@@ -244,7 +248,7 @@ function AppContent() {
             {isAdmin && (
               <>
                 <Link to="/admin/hotels" className="text-sm text-text/60 hover:text-text transition-colors">
-                  Отели
+                  Управление отелями
                 </Link>
                 <Link to="/admin/services" className="text-sm text-text/60 hover:text-text transition-colors">
                   Услуги
@@ -267,6 +271,8 @@ function AppContent() {
           {/* Public */}
           <Route path="/rooms" element={<RoomSearchPage />} />
           <Route path="/rooms/:roomNo" element={<RoomDetailsPage />} />
+          <Route path="/hotels" element={<Navigate to="/" replace />} />
+          <Route path="/hotels/:hotelCode" element={<HotelDetailPage />} />
           <Route path="/hotels/:hotelCode/reviews" element={<HotelReviewsPage />} />
 
           {/* Guest only */}

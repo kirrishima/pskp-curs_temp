@@ -1,5 +1,5 @@
 import api from './axiosInstance';
-import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination, AdminUser, UsersPagination, Review, ReviewsPagination, ReviewsStats } from '@/types';
+import type { Hotel, Room, Service, RoomServiceEntry, RoomImage, PaginationInfo, BookingsPagination, AdminUser, UsersPagination, Review, ReviewsPagination, ReviewsStats, HotelImage } from '@/types';
 
 // ── Module-level promise cache ───────────────────────────────────────────────
 // Caches the promise itself (not just the resolved value) so that concurrent
@@ -70,6 +70,44 @@ export async function updateHotel(hotelCode: string, payload: Partial<Hotel>): P
 export async function deleteHotel(hotelCode: string): Promise<{ message: string }> {
   const { data } = await api.delete(`/hotels/${hotelCode}`);
   return data;
+}
+
+/**
+ * Public hotel list (no auth required) — cached 10s.
+ * withCache supports a third argument (ttl in ms), so we pass custom TTL.
+ */
+export function getHotelsPublic(): Promise<{ hotels: Hotel[] }> {
+  return withCache('hotels:public:list', () =>
+    api.get('/hotels/public').then((r) => r.data),
+    10000,
+  );
+}
+
+/**
+ * Upload hotel images (admin).
+ */
+export async function uploadHotelImages(
+  hotelCode: string,
+  formData: FormData,
+): Promise<{ images: HotelImage[] }> {
+  const { data } = await api.post(`/uploads/hotels/${hotelCode}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+/**
+ * Delete hotel image (admin).
+ */
+export async function deleteHotelImage(hotelCode: string, imageId: string): Promise<void> {
+  await api.delete(`/uploads/hotels/${hotelCode}/${imageId}`);
+}
+
+/**
+ * Set hotel image as main (admin).
+ */
+export async function setMainHotelImage(hotelCode: string, imageId: string): Promise<void> {
+  await api.patch(`/uploads/hotels/${hotelCode}/${imageId}/main`);
 }
 
 // ── Rooms ───────────────────────────────────────────────────────────────────

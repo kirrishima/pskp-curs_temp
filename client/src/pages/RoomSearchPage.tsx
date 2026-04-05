@@ -14,14 +14,14 @@ import { INPUT_CLASS, FILTER_LABEL_CLASS } from '@/utils/formStyles';
 import { CURRENCY_SYMBOL } from '@/utils/currency';
 import Checkbox from '@/components/ui/Checkbox';
 import useAppSelector from '@/hooks/useAppSelector';
-import { searchRooms, getServices, deleteRoom } from '@/api/hotelApi';
+import { searchRooms, getServices, deleteRoom, getHotelsPublic } from '@/api/hotelApi';
 import type { RoomSearchResult } from '@/api/hotelApi';
 import RoomCard from '@/components/RoomCard';
 import Button from '@/components/ui/Button';
 import Shimmer, { ShimmerRoomCard } from '@/components/ui/Shimmer';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 import AlertModal from '@/components/modals/AlertModal';
-import type { Room, Service } from '@/types';
+import type { Room, Service, Hotel } from '@/types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -161,6 +161,8 @@ const FilterPanel = memo(function FilterPanel({
   isAdmin,
   onSearch,
   onReset,
+  hotels,
+  hotelsLoading,
 }: {
   filters: SearchFilters;
   onFiltersChange: (f: SearchFilters) => void;
@@ -170,6 +172,8 @@ const FilterPanel = memo(function FilterPanel({
   isAdmin: boolean;
   onSearch: () => void;
   onReset: () => void;
+  hotels: Hotel[];
+  hotelsLoading: boolean;
 }) {
   const handleChange = useCallback(
     (key: keyof SearchFilters, value: any) => onFiltersChange({ ...filters, [key]: value }),
@@ -203,6 +207,26 @@ const FilterPanel = memo(function FilterPanel({
         </div>
 
         <div className="space-y-5">
+          {/* ── Hotel ─────────────────────────────────────────────────── */}
+          {!isAdmin && (
+            <div>
+              <label className={labelClass}>Отель</label>
+              <select
+                value={filters.hotelCode || ''}
+                onChange={(e) => handleChange('hotelCode', e.target.value || undefined)}
+                className={inputClass}
+                disabled={hotelsLoading}
+              >
+                <option value="">Все отели</option>
+                {hotels.map((hotel) => (
+                  <option key={hotel.hotelCode} value={hotel.hotelCode}>
+                    {hotel.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* ── Sort — first ──────────────────────────────────────────── */}
           <div>
             <label className={labelClass}>Сортировка</label>
@@ -461,6 +485,8 @@ const RoomSearchPage = memo(function RoomSearchPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [hotelsLoading, setHotelsLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -494,6 +520,15 @@ const RoomSearchPage = memo(function RoomSearchPage() {
       .then(({ services: s }) => setServices(s.filter((svc) => svc.isActive)))
       .catch((err) => console.error('Failed to load services:', err))
       .finally(() => setServicesLoading(false));
+  }, []);
+
+  // ── Load hotels ────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    getHotelsPublic()
+      .then(({ hotels: h }) => setHotels(h))
+      .catch((err) => console.error('Failed to load hotels:', err))
+      .finally(() => setHotelsLoading(false));
   }, []);
 
   // ── Core search ───────────────────────────────────────────────────────────
@@ -771,6 +806,8 @@ const RoomSearchPage = memo(function RoomSearchPage() {
               isAdmin={isAdmin || false}
               onSearch={handleSearch}
               onReset={handleReset}
+              hotels={hotels}
+              hotelsLoading={hotelsLoading}
             />
           </div>
 

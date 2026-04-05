@@ -47,6 +47,16 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+// ─── Hotel Image ────────────────────────────────────────────────────────────
+
+export interface HotelImage {
+  imageId:    string;
+  hotelCode:  string;
+  imageUrl:   string;
+  isMain:     boolean;
+  uploadedAt: string;
+}
+
 // ─── Hotel ──────────────────────────────────────────────────────────────────
 
 export interface Hotel {
@@ -64,6 +74,9 @@ export interface Hotel {
   latitude?: number | null;
   longitude?: number | null;
   createdAt?: string;
+  images?: HotelImage[];
+  averageRating?: number | null;
+  totalReviews?: number;
   rooms?: RoomSummary[];
 }
 

@@ -353,4 +353,127 @@ router.delete('/reviews/:bookingId/:imageId', authenticate, async (req, res) => 
   }
 });
 
+// ── Hotel image upload ────────────────────────────────────────────────────────
+
+const hotelUploadDir = (hotelCode) => path.join(process.cwd(), 'uploads', 'hotels', hotelCode);
+
+const hotelStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = hotelUploadDir(req.params.hotelCode);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    // Temp name; renamed to uuid after save
+    cb(null, `tmp_${Date.now()}_${file.originalname}`);
+  },
+});
+
+const hotelUpload = multer({
+  storage: hotelStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_TYPES.has(file.mimetype)) {
+      return cb(new Error('Only JPEG, PNG, WebP and GIF images are allowed'));
+    }
+    cb(null, true);
+  },
+});
+
+// POST /api/uploads/hotels/:hotelCode — upload hotel images (admin only)
+router.post(
+  '/hotels/:hotelCode',
+  authenticate,
+  authorize('admin'),
+  (req, res, next) => hotelUpload.array('images', 10)(req, res, next),
+  async (req, res) => {
+    try {
+      const { hotelCode } = req.params;
+
+      const hotel = await prisma.hotel.findUnique({ where: { hotelCode } });
+      if (!hotel) return res.status(404).json({ error: 'Hotel not found' });
+
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+
+      const existingCount = await prisma.hotelImage.count({ where: { hotelCode } });
+
+      const savedImages = [];
+      for (const file of req.files) {
+        const imageId = uuidv4();
+        const ext = path.extname(file.originalname).toLowerCase();
+        const newFilename = `${imageId}${ext}`;
+        const newPath = path.join(hotelUploadDir(hotelCode), newFilename);
+        fs.renameSync(file.path, newPath);
+
+        const imageUrl = `/uploads/hotels/${hotelCode}/${newFilename}`;
+        const isMain = existingCount === 0 && savedImages.length === 0;
+
+        const img = await prisma.hotelImage.create({
+          data: { imageId, hotelCode, imageUrl, isMain },
+        });
+        savedImages.push(img);
+      }
+
+      logger.info('Hotel images uploaded', { hotelCode, count: savedImages.length });
+      res.status(201).json({ images: savedImages });
+    } catch (err) {
+      logger.error('Hotel image upload failed', { error: err.message });
+      res.status(500).json({ error: 'Upload failed' });
+    }
+  },
+);
+
+// DELETE /api/uploads/hotels/:hotelCode/:imageId — delete hotel image (admin only)
+router.delete('/hotels/:hotelCode/:imageId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { hotelCode, imageId } = req.params;
+
+    const image = await prisma.hotelImage.findUnique({ where: { imageId } });
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    if (image.hotelCode !== hotelCode) return res.status(403).json({ error: 'Access denied' });
+
+    // Delete file from disk
+    const filePath = path.join(process.cwd(), image.imageUrl);
+    if (fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+    }
+
+    await prisma.hotelImage.delete({ where: { imageId } });
+
+    // If deleted image was main, promote the next image
+    if (image.isMain) {
+      const next = await prisma.hotelImage.findFirst({ where: { hotelCode }, orderBy: { uploadedAt: 'asc' } });
+      if (next) await prisma.hotelImage.update({ where: { imageId: next.imageId }, data: { isMain: true } });
+    }
+
+    logger.info('Hotel image deleted', { hotelCode, imageId });
+    res.json({ message: 'Image deleted' });
+  } catch (err) {
+    logger.error('Hotel image delete failed', { error: err.message });
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// PATCH /api/uploads/hotels/:hotelCode/:imageId/main — set as main image (admin only)
+router.patch('/hotels/:hotelCode/:imageId/main', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { hotelCode, imageId } = req.params;
+
+    const image = await prisma.hotelImage.findUnique({ where: { imageId } });
+    if (!image || image.hotelCode !== hotelCode) return res.status(404).json({ error: 'Image not found' });
+
+    // Unset all, then set this one
+    await prisma.hotelImage.updateMany({ where: { hotelCode }, data: { isMain: false } });
+    await prisma.hotelImage.update({ where: { imageId }, data: { isMain: true } });
+
+    logger.info('Hotel main image set', { hotelCode, imageId });
+    res.json({ message: 'Main image updated' });
+  } catch (err) {
+    logger.error('Hotel set main image failed', { error: err.message });
+    res.status(500).json({ error: 'Failed to set main image' });
+  }
+});
+
 module.exports = router;

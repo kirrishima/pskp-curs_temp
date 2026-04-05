@@ -165,8 +165,23 @@ model Hotel {
   createdAt    DateTime @default(now())
 
   rooms Room[]
+  images HotelImage[]
 
   @@map("hotels")
+}
+
+// ── Hotel Images ────────────────────────────────────────────────────────────
+
+model HotelImage {
+  imageId    String   @id @default(uuid()) @map("image_id") @db.Uuid
+  hotelCode  String   @map("hotel_code")
+  hotel      Hotel    @relation(fields: [hotelCode], references: [hotelCode], onDelete: Cascade)
+  imageUrl   String   @map("image_url")
+  isMain     Boolean  @default(false) @map("is_main")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@index([hotelCode])
+  @@map("hotel_images")
 }
 
 // ── Rooms ───────────────────────────────────────────────────────────────────

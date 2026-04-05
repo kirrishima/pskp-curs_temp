@@ -137,6 +137,26 @@ const steps = [
       END $$
     `,
   },
+
+  // ── 010: hotel_images table ──────────────────────────────────────────────────
+  {
+    name: '010_create_hotel_images',
+    sql: `
+      CREATE TABLE IF NOT EXISTS hotel_images (
+        image_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        hotel_code TEXT        NOT NULL REFERENCES hotels(hotel_code) ON DELETE CASCADE,
+        image_url  TEXT        NOT NULL,
+        is_main    BOOLEAN     NOT NULL DEFAULT FALSE,
+        uploaded_at TIMESTAMP  NOT NULL DEFAULT NOW()
+      )
+    `,
+  },
+  {
+    name: '010b_hotel_images_index',
+    sql: `
+      CREATE INDEX IF NOT EXISTS hotel_images_hotel_code_idx ON hotel_images(hotel_code)
+    `,
+  },
 ];
 
 async function runMigrations() {
