@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { getMyBookings } from '@/api/hotelApi';
+import { fmtPrice } from '@/utils/currency';
 import type { Booking, BookingStatus, BookingsPagination } from '@/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -41,9 +42,7 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
-function formatCurrency(amount: number, currency = 'RUB'): string {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
-}
+const formatCurrency = (amount: number, _currency?: string) => fmtPrice(amount);
 
 function getNights(startDate: string, endDate: string): number {
   const msPerDay = 24 * 60 * 60 * 1000;

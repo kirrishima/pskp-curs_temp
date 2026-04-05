@@ -20,6 +20,7 @@ import {
 import useAppSelector from '@/hooks/useAppSelector';
 import { getBookingById, cancelBookingWithRefund, getBookingReview, createReview, updateReview, deleteReview, uploadReviewImages, deleteReviewImage } from '@/api/hotelApi';
 import { API_BASE_URL } from '@/api/axiosInstance';
+import { fmtPrice } from '@/utils/currency';
 import type { Booking, BookingStatus, RefundStatus, CancellationSource, Review } from '@/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -42,13 +43,7 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
-function formatCurrency(amount: number, currency = 'RUB'): string {
-  return new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+const formatCurrency = (amount: number, _currency?: string) => fmtPrice(amount);
 
 function getNights(startDate: string, endDate: string): number {
   const msPerDay = 24 * 60 * 60 * 1000;
@@ -235,7 +230,7 @@ function ReviewSection({ bookingId, isStaff, userId, bookingUserId, bookingStatu
     const loadReview = async () => {
       try {
         const data = await getBookingReview(bookingId);
-        setReview(data);
+        setReview(data.review);
       } catch (err) {
         const is404 = err instanceof Error && err.message.includes('404');
         if (!is404) {
@@ -303,7 +298,7 @@ function ReviewSection({ bookingId, isStaff, userId, bookingUserId, bookingStatu
 
       // Reload review to get full data with images
       const updated = await getBookingReview(bookingId);
-      setReview(updated);
+      setReview(updated.review);
 
       // Reset form
       setRating(5);
@@ -340,7 +335,7 @@ function ReviewSection({ bookingId, isStaff, userId, bookingUserId, bookingStatu
 
       // Reload review
       const updated = await getBookingReview(bookingId);
-      setReview(updated);
+      setReview(updated.review);
 
       // Reset form
       setIsEditing(false);

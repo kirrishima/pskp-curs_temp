@@ -3,6 +3,7 @@ import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { CalendarDays, ChevronRight, BedDouble, Loader2, AlertCircle, Receipt } from 'lucide-react';
 import useAppSelector from '@/hooks/useAppSelector';
 import { getMyBookings } from '@/api/hotelApi';
+import { fmtPrice } from '@/utils/currency';
 import type { Booking, BookingStatus } from '@/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -15,9 +16,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function formatCurrency(amount: number, currency = 'RUB'): string {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
-}
+const formatCurrency = (amount: number, _currency?: string) => fmtPrice(amount);
 
 function getNights(startDate: string, endDate: string): number {
   const msPerDay = 24 * 60 * 60 * 1000;
@@ -154,7 +153,7 @@ export default function BookingsPage() {
     setError(null);
     try {
       const result = await getMyBookings(
-        statusFilter ? { status: statusFilter } : undefined,
+        { sortBy: 'createdAt', sortOrder: 'desc', ...(statusFilter ? { status: statusFilter } : {}) },
         signal,
       );
       if (!signal?.aborted) {
